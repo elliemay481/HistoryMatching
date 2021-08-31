@@ -1,8 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-#from hist_match import kernels, emulator
-import hist_match.kernels as kernels
-import hist_match.emulator as emulator
+from Prepackage import *
 
 def true_model(x, t):
     f0  = 1
@@ -26,7 +24,7 @@ sigma = 1.5        # sqrt variance of covariance function
 theta = 0.14       # length scale
 beta = 3.5         # prior expectation
 
-kern = kernels.SE(sigma,theta)
+kern = SE(sigma,theta)
 
 GP = emulator.Gaussian_Process(x_train, x_test, y_train, beta, kern)
 
