@@ -1,24 +1,20 @@
 import numpy as np
-import Prepackage
 
-def SE(sigma, theta):
+def SE():
     """Create a squared exponential kernel
-
-    Args:
-        sigma (float) : The standard deviation of the kernel.
-        theta (float) : The length scale of the kernel.
-        
 
     Returns:
         squared_exponential (function) : A function of two numpy.ndarrays of floats that computes the squared exponential
         kernel with given standard deviation and length scale.
     """
 
-    def squared_exponential(x1,x2):
+    def squared_exponential(x1,x2,sigma,theta):
         """
         Args:
             x1 : (n x d) array of floats
             x2 : (m x d) array of floats
+            sigma (float) : The standard deviation of the kernel.
+            theta (float) : The length scale of the kernel.
 
         Returns:
             (n x m) covariance matrix
