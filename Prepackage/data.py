@@ -41,7 +41,8 @@ def prepare_data(ndim, Nsamples, Ntraining, limits):
     for i in range(ndim):
         parameter_space[:,i] = np.linspace(limits[i,0], limits[i,1], Nsamples)
 
-    input_test = np.array(np.meshgrid(*parameter_space.T)).T.reshape(-1,ndim)
+    #input_test = np.array(np.meshgrid(*parameter_space.T)).T.reshape(-1,ndim)
+    input_test = LHsampling(ndim, Nsamples, limits)
     # generate training points on Latin Hypercube
     input_train = LHsampling(ndim, Ntraining, limits)
 
