@@ -22,7 +22,7 @@ def LHsampling(ndim, Ntraining, limits):
 
     return input_train
 
-def prepare_data(ndim, Nsamples, Ntraining, limits):
+def prepare_data(ndim, Nsamples, Ntraining, limits, true_model):
 
     '''
     Args:
@@ -34,6 +34,7 @@ def prepare_data(ndim, Nsamples, Ntraining, limits):
     Returns: (d x M) array of training points
     
     '''
+    true_model_vec = np.vectorize(true_model)
 
     parameter_space = np.zeros((Nsamples, ndim))
     # define parameter space
@@ -46,4 +47,17 @@ def prepare_data(ndim, Nsamples, Ntraining, limits):
     # generate training points on Latin Hypercube
     input_train = LHsampling(ndim, Ntraining, limits)
 
-    return input_train, input_test
+     # evaluate true model over training inputs
+    output_train = np.zeros(Ntraining)
+    #for i in range(Ntraining):
+    output_train = true_model_vec(*input_train.T)
+
+
+    return input_train, input_test, output_train
+
+def locate_boundaries(data, ndim):
+    
+    def find_minmax(data, i):
+        return np.array([data[:,i].min(), data[:,i].max()]).reshape(1,-1)
+
+    return np.concatenate([find_minmax(data, i) for i in range(ndim)]) 

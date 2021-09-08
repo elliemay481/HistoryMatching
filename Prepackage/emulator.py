@@ -66,7 +66,10 @@ class Gaussian_Process:
             K_XX = self.kernel(self.input_train, self.input_train, self.sigma, theta)
             K_XX_inv = np.linalg.inv(K_XX)
 
-            return 0.5 * ( (self.output_train.T).dot((K_XX_inv.dot(self.output_train))) + np.log(np.linalg.det(K_XX)) + len(self.input_train)*np.log(2*np.pi) )
+            if np.linalg.det(K_XX) == 0:
+                return 1
+            else:
+                return 0.5 * ( (self.output_train.T).dot((K_XX_inv.dot(self.output_train))) + np.log(np.linalg.det(K_XX)) + len(self.input_train)*np.log(2*np.pi) )
 
         result = minimize(neg_log_marginal_likelihood, x0 = 3)
         self.theta = result.x
