@@ -46,25 +46,27 @@ def evaluate_cell(cell, n_grid, parameter_bounds, points, ndim):
 
     previous_indices = np.array([])
 
-    for i in range(2):
+    for i in range(ndim):
         i_range = parameter_bounds[i,1] - parameter_bounds[i,0]
         cell_i = i_range / n_grid
         cell_volume = cell_volume * cell_i
+    
 
+    for i in range(ndim):
         min_i = parameter_bounds[i,0] + cell_i*(cell[i]%n_grid)
         max_i = parameter_bounds[i,0] + cell_i*(cell[i]%n_grid + 1)
 
         indices = np.where(np.logical_and(points[:,i]>=min_i, points[:,i]<=max_i))
 
-        #all_indices = np.append(all_indices, indices_temp[0])
-        common_indices = np.intersect1d(indices, previous_indices)
-        previous_indices = indices
-
-    #print(common_indices)
+        if i == 0:
+            previous_indices = indices
+        else:
+            common_indices = np.intersect1d(indices, previous_indices)
+            previous_indices = common_indices
     density = len(common_indices) / cell_volume
     return common_indices, density
 
-def find_clusters_2D(dataset, input_test, ndim, n_grid = 5, threshold=1):
+def find_clusters_2D(dataset, input_test, ndim, n_grid = 10, threshold=1):
 
     # define parameter space
     parameter_bounds = data.locate_boundaries(input_test, ndim)
@@ -109,6 +111,7 @@ def find_clusters_2D(dataset, input_test, ndim, n_grid = 5, threshold=1):
                         neighbours.remove(neighbour)
             else:
                 cluster_list.append(cluster)
+                
                 cluster = np.empty((0,2))
                 
         else:
@@ -116,7 +119,7 @@ def find_clusters_2D(dataset, input_test, ndim, n_grid = 5, threshold=1):
     
     return cluster_list
 
-def find_clusters_3D(dataset, input_test, ndim, parameter_bounds, n_grid = 10, threshold=2):
+def find_clusters_3D(dataset, input_test, ndim, parameter_bounds, n_grid = 1, threshold=1):
 
     # define parameter space
     parameter_bounds = data.locate_boundaries(input_test, ndim)
@@ -142,7 +145,7 @@ def find_clusters_3D(dataset, input_test, ndim, parameter_bounds, n_grid = 10, t
             cell = all_cells[cell_index]
         # calculate density of cell
         traversed_cells.append(cell_index)
-        cell_pts, density =  evaluate_cell(cell, n_grid, parameter_bounds, points, ndim)
+        cell_pts, density =  evaluate_cell(cell, n_grid, parameter_bounds, points, ndim) 
         # check if density is greater than threshold
         if density > threshold:
             # mark cell as new cluster
@@ -155,12 +158,11 @@ def find_clusters_3D(dataset, input_test, ndim, parameter_bounds, n_grid = 10, t
                 n_1[j] += 1
                 n_2[j] += -1
                 n1_index = np.where((all_cells == n_1).all(axis=1))[0]
-                n2_index = np.where((all_cells == n_1).all(axis=1))[0]
+                n2_index = np.where((all_cells == n_2).all(axis=1))[0]
                 if (n1_index not in traversed_cells) & (n1_index.size != 0):
                     neighbours.append(n_1)
                 if (n2_index not in traversed_cells) & (n2_index.size != 0):
                     neighbours.append(n_2)
-
             while len(neighbours) != 0:
                 for neighbour in neighbours:
                     neigh_index = np.where((all_cells == neighbour).all(axis=1))[0]
@@ -172,19 +174,17 @@ def find_clusters_3D(dataset, input_test, ndim, parameter_bounds, n_grid = 10, t
                         if density_neigh > threshold:
                             cluster = np.append(cluster, points[cell_pts_neigh], axis=0)
                             for j in range(ndim):
-                                n_1 = [val for val in cell]
-                                n_2 = [val for val in cell]
+                                n_1 = [val for val in neighbour]
+                                n_2 = [val for val in neighbour]
                                 n_1[j] += 1
                                 n_2[j] += -1
                                 n1_index = np.where((all_cells == n_1).all(axis=1))[0]
-                                n2_index = np.where((all_cells == n_1).all(axis=1))[0]
+                                n2_index = np.where((all_cells == n_2).all(axis=1))[0]
                                 if (n1_index not in traversed_cells) & (n1_index.size != 0):
                                     neighbours.append(n_1)
                                 if (n2_index not in traversed_cells) & (n2_index.size != 0):
                                     neighbours.append(n_2)
-
                             neighbours.remove(neighbour)
-                            #print('neighbour: ' + str(neighbour))
                         else:
                             neighbours.remove(neighbour)
                     else:

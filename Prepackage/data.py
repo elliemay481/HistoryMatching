@@ -22,7 +22,7 @@ def LHsampling(ndim, Ntraining, limits):
 
     return input_train
 
-def prepare_data(ndim, Nsamples, Ntraining, limits, true_model):
+def prepare_data(ndim, Nsamples, Ntraining, limits):
 
     '''
     Args:
@@ -34,7 +34,6 @@ def prepare_data(ndim, Nsamples, Ntraining, limits, true_model):
     Returns: (d x M) array of training points
     
     '''
-    true_model_vec = np.vectorize(true_model)
 
     parameter_space = np.zeros((Nsamples, ndim))
     # define parameter space
@@ -48,12 +47,12 @@ def prepare_data(ndim, Nsamples, Ntraining, limits, true_model):
     input_train = LHsampling(ndim, Ntraining, limits)
 
      # evaluate true model over training inputs
-    output_train = np.zeros(Ntraining)
+    #output_train = np.zeros(Ntraining)
     #for i in range(Ntraining):
-    output_train = true_model_vec(*input_train.T)
+    #output_train = true_model_vec(*input_train.T)
 
 
-    return input_train, input_test, output_train
+    return input_train, input_test
 
 def locate_boundaries(data, ndim):
     
