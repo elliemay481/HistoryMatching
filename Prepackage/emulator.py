@@ -75,6 +75,7 @@ class Gaussian_Process:
 
         result = minimize(neg_log_marginal_likelihood, x0 = 3)
         self.theta = result.x
+        print(self.theta)
 
     def __repr__(self): 
         return "Test a:% s b:% s" % (self.theta, self.sigma) 

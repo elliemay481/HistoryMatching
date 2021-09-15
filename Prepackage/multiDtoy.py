@@ -1,7 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import random
-import matplotlib.gridspec as gridspec
 
 
 # import internal files
