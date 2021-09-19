@@ -11,15 +11,20 @@ class Gaussian_Process:
         theta (float) : The length scale of the kernel.
         beta (float) : Prior expectation
         kernel (function)
+        noise (boolean)
+        sigma_n (float) : standard devation of gaussian noise
 
     """
-    def __init__(self, input_train, input_test, output_train, sigma, beta, kernel):
+    def __init__(self, input_train, input_test, output_train, sigma, beta, theta, kernel, noise=False, sigma_n=None):
         self.input_train = input_train
         self.input_test = input_test
         self.output_train = output_train
         self.sigma = sigma
         self.kernel = kernel
         self.beta = beta
+        self.theta = theta
+        self.noise = noise
+        self.sigma_n = sigma_n
         
 
 
@@ -29,7 +34,10 @@ class Gaussian_Process:
             
         """
         
-        K_XX = self.kernel(self.input_train, self.input_train, self.sigma, self.theta)
+        if self.noise == True:
+            K_XX = self.kernel(self.input_train, self.input_train, self.sigma, self.theta) + (self.sigma_n**2)*np.eye(len(self.input_train))
+        else:
+            K_XX = self.kernel(self.input_train, self.input_train, self.sigma, self.theta)
         K_XsX = self.kernel(self.input_test, self.input_train, self.sigma, self.theta)
         K_XXs = self.kernel(self.input_train, self.input_test, self.sigma, self.theta)
         K_XsXs = self.kernel(self.input_test, self.input_test, self.sigma, self.theta)
@@ -73,9 +81,9 @@ class Gaussian_Process:
                 return 0.5 * ( (self.output_train.T).dot((K_XX_inv.dot(self.output_train))) + np.log(np.linalg.det(K_XX)) + len(self.input_train)*np.log(2*np.pi) )
                 
 
-        result = minimize(neg_log_marginal_likelihood, x0 = 3)
+        result = minimize(neg_log_marginal_likelihood, x0 = 1)
         self.theta = result.x
-        print(self.theta)
+        
 
     def __repr__(self): 
         return "Test a:% s b:% s" % (self.theta, self.sigma) 

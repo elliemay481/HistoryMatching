@@ -59,10 +59,10 @@ def implausibility_2D(input_imp, parameter_bounds_initial, ax, fig, wave, region
 def implausibility(input_imp, parameter_bounds_initial, ax, fig, wave, region, variables, variable_names, bins=20):
 
     # split axis into bins
-    ybound0 = parameter_bounds_initial[variables[0], 0]
-    ybound1 = parameter_bounds_initial[variables[0], 1]
-    xbound0 = parameter_bounds_initial[variables[1], 0]
-    xbound1 = parameter_bounds_initial[variables[1], 1]
+    ybound0 = parameter_bounds_initial[variables[1], 0]
+    ybound1 = parameter_bounds_initial[variables[1], 1]
+    xbound0 = parameter_bounds_initial[variables[0], 0]
+    xbound1 = parameter_bounds_initial[variables[0], 1]
     bin_width = (xbound1 - xbound0)/bins
     bin_height = (ybound1 - ybound0)/bins
 
@@ -79,8 +79,8 @@ def implausibility(input_imp, parameter_bounds_initial, ax, fig, wave, region, v
             xbin1 = xbin0 + bin_height
 
             # find points within bin
-            y_indices = np.where(np.logical_and(input_imp[:,variables[0]]>=ybin0, input_imp[:,variables[0]]<ybin1))
-            x_indices = np.where(np.logical_and(input_imp[:,variables[1]]>=xbin0, input_imp[:,variables[1]]<xbin1))
+            y_indices = np.where(np.logical_and(input_imp[:,variables[1]]>=ybin0, input_imp[:,variables[1]]<ybin1))
+            x_indices = np.where(np.logical_and(input_imp[:,variables[0]]>=xbin0, input_imp[:,variables[0]]<xbin1))
             bin_indices = np.intersect1d(x_indices, y_indices)
             # find minimised implausibility over remaining dimensions
             if bin_indices.shape[0] != 0:
@@ -104,8 +104,8 @@ def implausibility(input_imp, parameter_bounds_initial, ax, fig, wave, region, v
     #cbar = fig.colorbar(im, ax=ax)
     #cbar.set_label('Implausibility')
     #im.set_clim(0,10)
-    ax.set_ylabel(variable_names[0])
-    ax.set_xlabel(variable_names[1])
+    ax.set_ylabel(variable_names[1])
+    ax.set_xlabel(variable_names[0])
     #cbar.remove()
     #ax.set_title('Wave ' + str(wave+1) + ' Implausibility')
     #if input_imp.shape[1] > 2:
@@ -140,7 +140,7 @@ def nonimplausible_pts(input_train, nonimplausible, ax):
 
 
 
-def optical_depth_1D(input_imp, bins, ax, fig, variable, variable_name, parameter_bounds_initial, input_test_0):
+def optical_depth_1D(input_imp, bins, ax, fig, variable, variable_name, parameter_bounds_initial):
     #print(nonimplausible[:,variable])
     #ax.hist(nonimplausible[:,variable], bins=ngrid)
 
@@ -176,12 +176,12 @@ def optical_depth_1D(input_imp, bins, ax, fig, variable, variable_name, paramete
         ax.axes.yaxis.set_visible(False)
     ax.set_xlim([-2,2])
 
-def optical_depth_2D(input_imp, parameter_bounds_initial, input_test_0, ax, fig, wave, region, variables, variable_names, bins=20):
+def optical_depth_2D(input_imp, parameter_bounds_initial, ax, fig, wave, region, variables, variable_names, bins=30):
     # split axis into bins
-    ybound0 = parameter_bounds_initial[variables[0], 0]
-    ybound1 = parameter_bounds_initial[variables[0], 1]
-    xbound0 = parameter_bounds_initial[variables[1], 0]
-    xbound1 = parameter_bounds_initial[variables[1], 1]
+    ybound0 = parameter_bounds_initial[variables[1], 0]
+    ybound1 = parameter_bounds_initial[variables[1], 1]
+    xbound0 = parameter_bounds_initial[variables[0], 0]
+    xbound1 = parameter_bounds_initial[variables[0], 1]
     bin_width = (xbound1 - xbound0)/bins
     bin_height = (ybound1 - ybound0)/bins
 
@@ -198,14 +198,14 @@ def optical_depth_2D(input_imp, parameter_bounds_initial, input_test_0, ax, fig,
             xbin1 = xbin0 + bin_height
 
             # find points within bin
-            y_indices = np.where(np.logical_and(input_imp[:,variables[0]]>=ybin0, input_imp[:,variables[0]]<ybin1))
-            x_indices = np.where(np.logical_and(input_imp[:,variables[1]]>=xbin0, input_imp[:,variables[1]]<xbin1))
+            y_indices = np.where(np.logical_and(input_imp[:,variables[1]]>=ybin0, input_imp[:,variables[1]]<ybin1))
+            x_indices = np.where(np.logical_and(input_imp[:,variables[0]]>=xbin0, input_imp[:,variables[0]]<xbin1))
             bin_indices = np.intersect1d(x_indices, y_indices)
             # count nonimplausible points over remaining dimensions
             n_pts = np.count_nonzero(input_imp[bin_indices][:,-1] < 3)
             # find initial number of points 
-            y_indices_0 = np.where(np.logical_and(input_imp[:,variables[0]]>=ybin0, input_imp[:,variables[0]]<ybin1))
-            x_indices_0 = np.where(np.logical_and(input_imp[:,variables[1]]>=xbin0, input_imp[:,variables[1]]<xbin1))
+            y_indices_0 = np.where(np.logical_and(input_imp[:,variables[1]]>=ybin0, input_imp[:,variables[1]]<ybin1))
+            x_indices_0 = np.where(np.logical_and(input_imp[:,variables[0]]>=xbin0, input_imp[:,variables[0]]<xbin1))
             bin_indices_0 = np.intersect1d(x_indices_0, y_indices_0)
 
             if len(bin_indices_0) != 0:
@@ -232,8 +232,8 @@ def optical_depth_2D(input_imp, parameter_bounds_initial, input_test_0, ax, fig,
     #cbar = fig.colorbar(im, ax=ax)
     #cbar.set_label('Implausibility')
     #im.set_clim(0,10)
-    ax.set_ylabel(variable_names[0])
-    ax.set_xlabel(variable_names[1])
+    ax.set_ylabel(variable_names[1])
+    ax.set_xlabel(variable_names[0])
     #cbar.remove()
     #ax.set_title('Wave ' + str(wave+1) + ' Implausibility')
     if variables[0] != input_imp.shape[1] - 2:
