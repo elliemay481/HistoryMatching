@@ -297,7 +297,7 @@ def history_match(kernel, true_model, parameter_bounds, sigma_cov, var_exp, var_
 
 
             # isolate implausible regions based on greatest y difference
-            clusters = find_clusters_3D(ax2, nonimplausible, input_test, ndim, parameter_bounds, n_grid=5)
+            clusters = find_clusters_3D(ax2, nonimplausible, input_test, ndim, parameter_bounds, n_grid=15)
             
             # find cluster sizes in comparison to total implausible volume
             total_volume = 0
@@ -349,7 +349,7 @@ def history_match(kernel, true_model, parameter_bounds, sigma_cov, var_exp, var_
 
         if plotOD == False:
             # plot true 3sigma region
-            ax3.scatter(xvals[idx_joint[:,1]], yvals[idx_joint[:,0]], color='fuchsia', alpha=0.3, label=r'Joint $3\sigma$ region')
+            #ax3.scatter(xvals[idx_joint[:,1]], yvals[idx_joint[:,0]], color='fuchsia', alpha=0.3, label=r'Joint $3\sigma$ region')
             ax2.set_xlim([parameter_bounds_initial[0,0], parameter_bounds_initial[0,1]])
             ax2.set_ylim([parameter_bounds_initial[1,0], parameter_bounds_initial[1,1]])
             ax3.set_xlim([parameter_bounds_initial[0,0], parameter_bounds_initial[0,1]])
