@@ -1,7 +1,7 @@
 import numpy as np
 from pyDOE import lhs
 
-def LHsampling_old(ndim, Ntraining, limits):
+def LHsampling(ndim, Ntraining, limits):
     
     '''
     Args:
@@ -23,7 +23,7 @@ def LHsampling_old(ndim, Ntraining, limits):
     
     return input_train
 
-def LHsampling(ndim, Ntraining, limits, ncells):
+def LHsampling_grid(ndim, Ntraining, limits, ncells):
     
     '''
     Args:
@@ -82,7 +82,7 @@ def prepare_data_old(ndim, Nsamples, Ntraining, limits):
 
     return input_train, input_test
 
-def prepare_data(ndim, Nsamples, Ntraining, limits, ncells):
+def prepare_data(ndim, Nsamples, Ntraining, limits):
 
     '''
     Args:
@@ -95,8 +95,8 @@ def prepare_data(ndim, Nsamples, Ntraining, limits, ncells):
     
     '''
     # generate sample points on Latin Hypercube
-    input_test = LHsampling(ndim, Nsamples, limits, ncells)
-    input_train = LHsampling(ndim, Ntraining, limits, ncells)
+    input_test = LHsampling(ndim, Nsamples, limits)
+    input_train = LHsampling(ndim, Ntraining, limits)
 
     return input_train, input_test
 

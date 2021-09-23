@@ -2,6 +2,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import colors
 from matplotlib import cm
+from scipy import stats
+from scipy.stats import norm, uniform
+import scipy.optimize
 
 def implausibility_2D(input_imp, parameter_bounds_initial, ax, fig, wave, region, variables, variable_names, bins=20):
     
@@ -57,6 +60,7 @@ def implausibility_2D(input_imp, parameter_bounds_initial, ax, fig, wave, region
         ax.set_title('Wave ' + str(wave+1) + ' Implausibility')
 
 def implausibility(input_imp, parameter_bounds_initial, ax, fig, wave, region, variables, variable_names, bins=20):
+
 
     # split axis into bins
     ybound0 = parameter_bounds_initial[variables[1], 0]
@@ -167,7 +171,7 @@ def optical_depth_1D(input_imp, bins, ax, fig, variable, variable_name, paramete
         bin_count = np.count_nonzero(input_imp[indices,-1] < 3, axis=1)
         counts.append(bin_count[0]/initial_space)
 
-    ax.bar(bin_list, counts)
+    ax.bar(bin_list, counts, alpha=0.5)
 
 
     if variable != input_imp.shape[1] - 2:
@@ -240,3 +244,79 @@ def optical_depth_2D(input_imp, parameter_bounds_initial, ax, fig, wave, region,
         ax.axes.xaxis.set_visible(False)
     if variables[1] != 0:
         ax.axes.yaxis.set_visible(False)
+
+def plot_ellipsoid(ell, ax):
+    """Plot the 3-d Ellipsoid ell on the Axes3D ax."""
+
+    # points on unit sphere
+    u = np.linspace(0.0, 2.0 * np.pi, 100)
+    v = np.linspace(0.0, np.pi, 100)
+    z = np.outer(np.cos(u), np.sin(v))
+    y = np.outer(np.sin(u), np.sin(v))
+    x = np.outer(np.ones_like(u), np.cos(v))
+    print(np.linalg.inv(ell.a))
+    # transform points to ellipsoid
+    for i in range(len(x)):
+        for j in range(len(x)):
+            x[i,j], y[i,j] = ell.ctr + np.dot(ell.axes,
+                                                      [x[i,j],y[i,j]])
+
+    ax.plot(x, y, color='#2980b9', alpha=0.2)
+
+def get_cov_ellipse(cov, centre, nstd, ax, color):
+    """
+    Return a matplotlib Ellipse patch representing the covariance matrix
+    cov centred at centre and scaled by the factor nstd.
+
+    """
+
+    # Find and sort eigenvalues and eigenvectors into descending order
+    eigvals, eigvecs = np.linalg.eigh(cov)
+    order = eigvals.argsort()[::-1]
+    eigvals, eigvecs = eigvals[order], eigvecs[:, order]
+
+    # The anti-clockwise angle to rotate our ellipse by 
+    vx, vy = eigvecs[:,0][0], eigvecs[:,0][1]
+    theta = np.arctan2(vy, vx)
+
+    # Width and height of ellipse to draw
+    width, height = 2 * nstd * np.sqrt(np.abs(eigvals))
+    
+    t = np.linspace(0, 2*np.pi, 100)
+    Ell = np.array([0.5*width*np.cos(t) , 0.5*height*np.sin(t)]) 
+    R_rot = np.array([[np.cos(theta) , -np.sin(theta)],[np.sin(theta), np.cos(theta)]])  
+    Ell_rot = np.zeros((2,Ell.shape[1]))
+    for i in range(Ell.shape[1]):
+        Ell_rot[:,i] = np.dot(R_rot,Ell[:,i])
+    
+    ax.plot(centre[0]+Ell_rot[0,:] , centre[1]+Ell_rot[1,:], color=color)
+    ax.scatter(centre[0], centre[1], marker='x', color=color)
+        
+    #return Ellipse(xy=centre, width=width, height=height,
+                   #angle=np.degrees(theta), **kwargs)
+
+
+def plot_ellipses(fig, parameter_bounds, true_parameters, H, theta_best, theta_vals, color):
+    theta_names = [r'$\theta_{0}$', r'$\theta_{1}$', r'$\theta_{2}$']
+    N = len(true_parameters)
+    for i in range(N):
+        for j in range(N):
+            ax = fig.axes[i + N*j]
+            if i != 0:
+                ax.axes.yaxis.set_visible(False)
+                
+            if i == j:
+                ax.plot(theta_vals[i], stats.norm.pdf(theta_vals[i], theta_best[i], np.sqrt(H[i,i])), color=color)
+                ax.set_title(str(theta_names[i]) + '=' + str(round(theta_best[i], 2)), fontsize=14)
+                
+            elif i < j:
+                
+                cov_matrix = np.array([[H[i,i], H[i,j]],[H[j,i], H[j,j]]])
+                get_cov_ellipse(cov_matrix, [theta_best[i], theta_best[j]], 3, ax, color)
+                ax.set_ylabel(theta_names[j])
+                ax.set_xlabel(theta_names[i])
+                ax.set_xlim([parameter_bounds[i,0], parameter_bounds[i,1]])
+                ax.set_ylim([parameter_bounds[j,0], parameter_bounds[j,1]])
+                
+            else:
+                ax.axis('off')
