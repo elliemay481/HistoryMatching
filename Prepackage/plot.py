@@ -98,7 +98,7 @@ def implausibility(input_imp, parameter_bounds_initial, ax, fig, wave, region, v
         bounds = np.linspace(np.nanmin(implausibilities), np.nanmax(implausibilities), 8)
     cmap = cm.get_cmap('viridis_r', len(bounds))
 
-    im = ax.contourf(xvals, yvals, implausibilities, levels=bounds, colors=[cmap(0), cmap(0.1), cmap(0.15), cmap(0.3), cmap(0.45), cmap(0.6), cmap(0.85), cmap(1)])
+    ax.contourf(xvals, yvals, implausibilities, levels=bounds, colors=[cmap(0), cmap(0.1), cmap(0.15), cmap(0.3), cmap(0.45), cmap(0.6), cmap(0.85), cmap(1)])
     #im = ax.contourf(xvals, yvals, implausibilities, cmap='viridis_r')
 
 
@@ -298,7 +298,7 @@ def get_cov_ellipse(cov, centre, nstd, ax, color):
 
 def plot_ellipses(fig, parameter_bounds, true_parameters, H, theta_best, theta_vals, color):
     theta_names = [r'$\theta_{0}$', r'$\theta_{1}$', r'$\theta_{2}$']
-    N = len(true_parameters)
+    N = len(theta_best)
     for i in range(N):
         for j in range(N):
             ax = fig.axes[i + N*j]

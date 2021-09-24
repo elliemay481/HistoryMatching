@@ -77,14 +77,16 @@ def evaluate_cell(ax2, cell, n_grid, parameter_bounds, points, ndim):
     return density, cell_limits
 
 def find_bounding_ellipse(points, volume=None):
-    ells = nestle.bounding_ellipsoids(points, volume)
+    ells = nestle.bounding_ellipsoid(points, volume)
     ctrlist = []
     covlist = []
-    for i in range(len(ells)):
-        cov = np.linalg.inv(ells[i].a)
-        covlist.append(cov)
-        ctrlist.append(ells[i].ctr)
-    return ctrlist, covlist, ells
+    #for i in range(len(ells)):
+        #cov = np.linalg.inv(ells[i].a)
+        #covlist.append(cov)
+        #ctrlist.append(ells[i].ctr)
+
+    cov = np.linalg.inv(ells.a)
+    return ells.ctr, cov, ells
 
 
 def find_clusters_3D(ax2, dataset, input_test, ndim, parameter_bounds, n_grid = 1, threshold=1):
@@ -392,7 +394,9 @@ def history_match(true_model, obs_data, xvals, kernel, ndim, Nsamples, Ntraining
 
     fig, axes = plt.subplots(waves, 1, figsize=(8, 6*waves))
     gs0 = gridspec.GridSpec(waves, 1)
+    
     ax_list = fig.axes
+
     color_list = ['plum', 'mediumaquamarine']
 
     parameter_bounds_initial = parameter_bounds
@@ -402,7 +406,7 @@ def history_match(true_model, obs_data, xvals, kernel, ndim, Nsamples, Ntraining
 
         print('Current wave: ' + str(k+1))
 
-
+        ax_list[k].axis('off')
         gs00 = gridspec.GridSpecFromSubplotSpec(ndim, ndim, subplot_spec=gs0[k], wspace=0.1, hspace=0.1)
         p1axes = np.empty((ndim,ndim), dtype=object)
         for i in range(ndim):
@@ -451,18 +455,17 @@ def history_match(true_model, obs_data, xvals, kernel, ndim, Nsamples, Ntraining
         # choose maximum implausibility
         # create function to do this separately later, and look at 2nd or 3rd max
         # get index of maximum implaus for all outputs
-        max_I = np.argmax(implausibility_all, axis=1)
+        #max_I = np.argmax(implausibility_all, axis=1)
         # get index of second highest maximum implaus for all outputs
-        #max2_I = implausibility_all.argsort()[:,-2]
-        implausibilities = implausibility_all[range(len(max_I)), max_I]
+        max2_I = implausibility_all.argsort()[:,-2]
+        implausibilities = implausibility_all[range(len(max2_I)), max2_I]
 
         # identify nonimplausible region
         samples_implaus = np.concatenate((theta_test, implausibilities.reshape(-1,1)), axis=1)
         nonimplausible = np.delete(samples_implaus, np.where(samples_implaus[:,-1] > 3), axis=0)
 
-        ctrlist, covlist, ell = find_bounding_ellipse(nonimplausible[:,:ndim], 0)
-        Nellipse = len(ell)
-
+        ctr, cov, ell = find_bounding_ellipse(nonimplausible[:,:ndim], 0)
+        
         # plot implausibilities and optical depth
         variable_names = ['theta1', 'theta2', 'theta3']
         for i in range(ndim):
@@ -477,18 +480,16 @@ def history_match(true_model, obs_data, xvals, kernel, ndim, Nsamples, Ntraining
                         #ax_right.plot(theta_vals, stats.norm.pdf(theta_vals, true_thetas[m][i], np.sqrt(H[m][i,i])), color=color_list[m])
                     if i < ndim-1:
                         ax.scatter(nonimplausible[:,i], nonimplausible[:,i+1])
-                        for el in range(Nellipse):
-                            cov = covlist[el]
-                            ctr = ctrlist[el]
-                            covi = np.array([[cov[i,i], cov[i,i+1]],[cov[i+1,i], cov[i+1,i+1]]])
-                            plot.get_cov_ellipse(covi, [ctr[i],ctr[i+1]], 1, ax, color='red')
+                        ax.set_xlim([parameter_bounds_initial[i,0], parameter_bounds_initial[i,1]])
+                        ax.set_ylim([parameter_bounds_initial[i+1,0], parameter_bounds_initial[i+1,1]])
+                        covi = np.array([[cov[i,i], cov[i,i+1]],[cov[i+1,i], cov[i+1,i+1]]])
+                        plot.get_cov_ellipse(covi, [ctr[i],ctr[i+1]], 1, ax, color='red')
                     else:
-                        ax.scatter(nonimplausible[:,0], nonimplausible[:,i])
-                        for el in range(Nellipse):
-                            cov = covlist[el]
-                            ctr = ctrlist[el]
-                            covi = np.array([[cov[i,i], cov[i,0]],[cov[0,i], cov[0,0]]])
-                            plot.get_cov_ellipse(covi, [ctr[i],ctr[0]], 1, ax, color='red')
+                        ax.scatter(nonimplausible[:,0], nonimplausible[:,i], s=2)
+                        ax.set_xlim([parameter_bounds_initial[0,0], parameter_bounds_initial[0,1]])
+                        ax.set_ylim([parameter_bounds_initial[i,0], parameter_bounds_initial[i,1]])
+                        covi = np.array([[cov[i,i], cov[i,0]],[cov[0,i], cov[0,0]]])
+                        plot.get_cov_ellipse(covi, [ctr[i],ctr[0]], 1, ax, color='red')
                     
 
                 elif i > j:
@@ -496,7 +497,7 @@ def history_match(true_model, obs_data, xvals, kernel, ndim, Nsamples, Ntraining
                     plot.implausibility(samples_implaus, parameter_bounds_initial, ax , fig, k, 0, [j,i], 
                             [variable_names[j], variable_names[i]], bins=30)
                     for m in range(len(true_model)):
-                        ax.scatter(true_thetas[m][i],true_thetas[m][j], color='red', marker='x')
+                        ax.scatter(true_thetas[m][j],true_thetas[m][i], color='red', marker='x')
                 #ax1.scatter(true_parameters[j], true_parameters[i], color='red', marker='x', label='Observed Data' if n == 0 else "")
                 else:
                     None
@@ -509,7 +510,7 @@ def history_match(true_model, obs_data, xvals, kernel, ndim, Nsamples, Ntraining
                         #ax.set_ylim([parameter_bounds_initial[j,0], parameter_bounds_initial[j,1]])
                         #plot.optical_depth_2D(samples_implaus, parameter_bounds_initial, ax1, fig1, k, n, variables, [variable_names[i], variable_names[j]])
         
-
+        
         if nonimplausible.size == 0:
                 print('empty')
                 continue
