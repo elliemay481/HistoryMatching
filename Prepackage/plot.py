@@ -180,7 +180,7 @@ def optical_depth_1D(input_imp, bins, ax, fig, variable, variable_name, paramete
         ax.axes.yaxis.set_visible(False)
     ax.set_xlim([-2,2])
 
-def optical_depth_2D(input_imp, parameter_bounds_initial, ax, fig, wave, region, variables, variable_names, bins=30):
+def optical_depth_2D(input_imp, parameter_bounds_initial, ax, fig, wave, variables, variable_names, bins=30):
     # split axis into bins
     ybound0 = parameter_bounds_initial[variables[1], 0]
     ybound1 = parameter_bounds_initial[variables[1], 1]
@@ -236,14 +236,15 @@ def optical_depth_2D(input_imp, parameter_bounds_initial, ax, fig, wave, region,
     #cbar = fig.colorbar(im, ax=ax)
     #cbar.set_label('Implausibility')
     #im.set_clim(0,10)
-    ax.set_ylabel(variable_names[1])
-    ax.set_xlabel(variable_names[0])
+    #ax.set_ylabel(variable_names[1])
+    #ax.set_xlabel(variable_names[0])
     #cbar.remove()
     #ax.set_title('Wave ' + str(wave+1) + ' Implausibility')
-    if variables[0] != input_imp.shape[1] - 2:
-        ax.axes.xaxis.set_visible(False)
-    if variables[1] != 0:
-        ax.axes.yaxis.set_visible(False)
+    #if variables[0] != input_imp.shape[1] - 2:
+        #ax.axes.xaxis.set_visible(False)
+    #if variables[1] != 0:
+        #ax.axes.yaxis.set_visible(False)
+    ax.axis('off')
 
 def plot_ellipsoid(ell, ax):
     """Plot the 3-d Ellipsoid ell on the Axes3D ax."""
@@ -297,7 +298,7 @@ def get_cov_ellipse(cov, centre, nstd, ax, color):
 
 
 def plot_ellipses(fig, parameter_bounds, true_parameters, H, theta_best, theta_vals, color):
-    theta_names = [r'$\theta_{0}$', r'$\theta_{1}$', r'$\theta_{2}$']
+    theta_names = [r'$\theta_{1}$', r'$\theta_{2}$', r'$\theta_{3}$']
     N = len(theta_best)
     for i in range(N):
         for j in range(N):

@@ -43,6 +43,9 @@ class Gaussian_Process:
         K_XsXs = self.kernel(self.input_test, self.input_test, self.sigma, self.theta)
         K_XX_inv = np.linalg.inv(K_XX)
 
+        #print(K_XX)
+        #print(np.linalg.det(K_XX))
+
         self.K_XX = K_XX
         self.K_XsX = K_XsX
         self.K_XXs = K_XXs
