@@ -29,6 +29,18 @@ def find_bounding_ellipse(points, volume=None):
     cov = np.linalg.inv(ells.a)
     return ells.ctr, cov, ells
 
+def find_bounding_ellipses(points, volume=None):
+
+    ell_list = []
+    ctr_list = []
+    cov_list = []
+    ells = nestle.bounding_ellipsoids(points, volume)
+    for i in range(len(ells)):
+        ctr_list.append(ells[i].ctr)
+        cov = np.linalg.inv(ells[i].a)
+        cov_list.append(cov)
+    return ctr_list, cov_list, ells
+
 
 
 
@@ -63,7 +75,7 @@ def history_match(true_model, obs_data, xvals, kernel, ndim, Nsamples, Ntraining
     Nx = len(xvals)      # number of independent variable, x, values
     Nfunc = len(true_model)
 
-    fig, axes = plt.subplots(waves, 1, figsize=(8, 6*waves))
+    fig, axes = plt.subplots(waves, 1, figsize=(10, 10*waves))
     gs0 = gridspec.GridSpec(waves, 1)
     
     ax_list = fig.axes
@@ -132,7 +144,31 @@ def history_match(true_model, obs_data, xvals, kernel, ndim, Nsamples, Ntraining
         samples_implaus = np.concatenate((theta_test, implausibilities.reshape(-1,1)), axis=1)
         nonimplausible = np.delete(samples_implaus, np.where(samples_implaus[:,-1] > 3), axis=0)
 
-        ctr, cov, ell = find_bounding_ellipse(nonimplausible[:,:ndim], 0)
+        # find single ellipse
+        #ctr_list, cov_list, ells = find_bounding_ellipses(nonimplausible[:,:ndim], 0)
+
+        # find multiple ellipses
+        ctr_list, cov_list, ells = find_bounding_ellipses(nonimplausible[:,:ndim], 0)
+
+        ctr = ctr_list[0]
+        cov = cov_list[0]
+        ell = ells[0]
+
+        theta_train = np.empty((0,3))
+        theta_test = np.empty((0,3))
+
+        print(len(ells))
+        for ellipse in range(len(ells)):
+            ctr = ctr_list[ellipse]
+            cov = cov_list[ellipse]
+            ell = ells[ellipse]
+
+            # sample new implausible volume
+            theta_train_i = sample_volume(ndim, cov, nsamples=int(np.ceil(Ntraining/len(ells))), ellipse=ell)
+            theta_test_i = sample_volume(ndim, cov, nsamples=int(np.ceil(Nsamples/len(ells))), ellipse=ell)
+
+            theta_train = np.concatenate((theta_train, theta_train_i), axis=0)
+            theta_test = np.concatenate((theta_test, theta_test_i), axis=0)
         
         # plot implausibilities and optical depth
         variable_names = [r'$\theta_{1}$', r'$\theta_{2}$', r'$\theta_{3}$']
@@ -146,26 +182,37 @@ def history_match(true_model, obs_data, xvals, kernel, ndim, Nsamples, Ntraining
                     elif i == ndim-1:
                         ax.set_xlabel(variable_names[i])
                     plot.optical_depth_1D(samples_implaus, 20, ax, fig, i, variable_names[i], parameter_bounds_initial)
-                    #ax_right = ax.twinx()
-                    #theta_vals = np.linspace(parameter_bounds_initial[i,0], parameter_bounds_initial[i,1], 100)
-                    #for m in range(len(true_model)):
-                        #ax_right.plot(theta_vals, stats.norm.pdf(theta_vals, true_thetas[m][i], np.sqrt(H[m][i,i])), color=color_list[m])
-                    '''
-                    if i < ndim-1:
+                    ax_right = ax.twinx()
+                    ax_right2 = ax.twinx()
+                    theta_vals = np.linspace(parameter_bounds_initial[i,0], parameter_bounds_initial[i,1], 100)
+                    ax_right.plot(theta_vals, stats.norm.pdf(theta_vals, true_thetas[0][i], np.sqrt(H[0][i,i])), color=color_list[0])
+                    ax_right2.plot(theta_vals, stats.norm.pdf(theta_vals, true_thetas[1][i], np.sqrt(H[1][i,i])), color=color_list[1])
+                    
+                    '''if i < ndim-1:
                         if i == 0:
                             ax.set_ylabel(variable_names[i])
                         ax.scatter(nonimplausible[:,i], nonimplausible[:,i+1], s=1)
                         ax.set_xlim([parameter_bounds_initial[i,0], parameter_bounds_initial[i,1]])
                         ax.set_ylim([parameter_bounds_initial[i+1,0], parameter_bounds_initial[i+1,1]])
-                        covi = np.array([[cov[i,i], cov[i,i+1]],[cov[i+1,i], cov[i+1,i+1]]])
-                        plot.get_cov_ellipse(covi, [ctr[i],ctr[i+1]], 1, ax, color='red')
+                        for ellipse in range(len(ells)):
+                            ctr = ctr_list[ellipse]
+                            cov = cov_list[ellipse]
+                            ell = ells[ellipse]
+                            covi = np.array([[cov[i,i], cov[i,i+1]],[cov[i+1,i], cov[i+1,i+1]]])
+                            plot.get_cov_ellipse(covi, [ctr[i],ctr[i+1]], 1, ax, color='red')
+                            ax.scatter(theta_train[:,i], theta_train[:,i+1], marker='x', color='limegreen')
                     else:
-                        ax.scatter(nonimplausible[:,0], nonimplausible[:,i], s=1)
+                        ax.scatter(nonimplausible[:,0], nonimplausible[:,i], color='cornflowerblue', s=1)
                         ax.set_xlim([parameter_bounds_initial[0,0], parameter_bounds_initial[0,1]])
                         ax.set_ylim([parameter_bounds_initial[i,0], parameter_bounds_initial[i,1]])
-                        covi = np.array([[cov[0,0], cov[0,i]],[cov[i,0], cov[i,i]]])
-                        plot.get_cov_ellipse(covi, [ctr[0],ctr[i]], 1, ax, color='red')
-                        ax.set_xlabel(variable_names[i])'''
+                        for ellipse in range(len(ells)):
+                            ctr = ctr_list[ellipse]
+                            cov = cov_list[ellipse]
+                            ell = ells[ellipse]
+                            covi = np.array([[cov[0,0], cov[0,i]],[cov[i,0], cov[i,i]]])
+                            plot.get_cov_ellipse(covi, [ctr[0],ctr[i]], 1, ax, color='red')
+                            ax.set_xlabel(variable_names[i])
+                            ax.scatter(theta_train[:,0], theta_train[:,i], marker='x', color='limegreen')'''
                     
 
                 elif i > j:
@@ -185,14 +232,13 @@ def history_match(true_model, obs_data, xvals, kernel, ndim, Nsamples, Ntraining
                         #ax.set_xlim([parameter_bounds_initial[i,0], parameter_bounds_initial[i,1]])
                         #ax.set_ylim([parameter_bounds_initial[j,0], parameter_bounds_initial[j,1]])
         
-        # sample new implausible volume
-        theta_train = sample_volume(ndim, cov, nsamples=Ntraining, ellipse=ell)
-        theta_test = sample_volume(ndim, cov, nsamples=Nsamples, ellipse=ell)
 
         # if no points left in implausible region, end
         if nonimplausible.size == 0:
                 print('Nonimplausible region empty')
                 return None
+
+    fig.savefig('implausibility_plots_multi_ellipse.png')
 
     return ctr, cov, nonimplausible, ell
 

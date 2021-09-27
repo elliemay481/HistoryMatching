@@ -92,10 +92,11 @@ def implausibility(input_imp, parameter_bounds_initial, ax, fig, wave, region, v
             else:
                 implausibilities[i,j] = np.NaN
 
-    if np.nanmax(implausibilities) > 3.5:
-        bounds=[0,0.5,1,1.5,2,2.5,3,3.5]
-    else:
-        bounds = np.linspace(np.nanmin(implausibilities), np.nanmax(implausibilities), 8)
+    #if np.nanmax(implausibilities) > 3.5:
+        #bounds=[0,0.5,1,1.5,2,2.5,3,3.5]
+    #else:
+        #bounds = np.linspace(np.nanmin(implausibilities), np.nanmax(implausibilities), 8)
+    bounds=[0,0.5,1,1.5,2,2.5,3,3.5]
     cmap = cm.get_cmap('viridis_r', len(bounds))
 
     ax.contourf(xvals, yvals, implausibilities, levels=bounds, colors=[cmap(0), cmap(0.1), cmap(0.15), cmap(0.3), cmap(0.45), cmap(0.6), cmap(0.85), cmap(1)])
@@ -220,7 +221,7 @@ def optical_depth_2D(input_imp, parameter_bounds_initial, ax, fig, wave, variabl
 
     
     #bounds=np.linspace(np.amin(densities), np.amax(densities), 8)
-    bounds = [0,0.1,0.2,0.3,0.4,0.5,0.6,0.8]
+    bounds = [0,0.05,0.1,0.2,0.3,0.4,0.5,0.6]
     cmap = cm.get_cmap('magma', len(bounds))
     #print(np.amin(densities))
     #print(np.amax(densities))
