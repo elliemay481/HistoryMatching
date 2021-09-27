@@ -308,8 +308,10 @@ def plot_ellipses(fig, parameter_bounds, true_parameters, H, theta_best, theta_v
                 ax.axes.yaxis.set_visible(False)
                 
             if i == j:
-                ax.plot(theta_vals[i], stats.norm.pdf(theta_vals[i], theta_best[i], np.sqrt(H[i,i])), color=color)
-                ax.set_title(str(theta_names[i]) + '=' + str(round(theta_best[i], 2)), fontsize=14)
+                if color == 'mediumaquamarine':
+                    ax_right = ax.twinx()
+                    ax_right.plot(theta_vals[i], stats.norm.pdf(theta_vals[i], theta_best[i], np.sqrt(H[i,i])), color=color)
+                    ax_right.set_title(str(theta_names[i]) + '=' + str(round(theta_best[i], 2)), fontsize=14)
                 
             elif i < j:
                 
