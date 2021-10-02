@@ -6,67 +6,59 @@ from scipy import stats
 from scipy.stats import norm, uniform
 import scipy.optimize
 
-def implausibility_2D(input_imp, parameter_bounds_initial, ax, fig, wave, region, variables, variable_names, bins=20):
+
+def plot_implausibility2D(samples, parameter_bounds, parameters, bins=20, Fig=None,
+                            labels=None, plot_kwargs=None):
+
+    """
+    Plots a minimised implausibilty plot for two parameters.
+
+    Args
+    ----
+
+    samples : array of floats
+        (nsamples x ndim+1) size array of nsamples coordinates in parameter space and
+        each coordinates corresponding implausibility. An array of samples for each wave
+        is an attribute of the output of HistoryMatch.run(). The samples for each wave
+        can be accessed by indexing the array of samples.
+
+    parameter_bounds : array of floats
+        (ndim x 2) array containing the initial upper and lower bounds assigned to 
+        each parameter to be plotted.
+
+    parameters : array of ints
+        If ndim > 2, a (1 x 2) array of the parameters to plot is required. The two
+        values in the array are integers corresponding to parameters, following the
+        same order as parameter_bounds. The first variable in the array will be plotted
+        on the x-axis and the second variable on the y-axis.
     
-    # split axis into bins
-    ybound0 = parameter_bounds_initial[variables[1], 0]
-    ybound1 = parameter_bounds_initial[variables[1], 1]
-    xbound0 = parameter_bounds_initial[variables[0], 0]
-    xbound1 = parameter_bounds_initial[variables[0], 1]
-    bin_width = (xbound1 - xbound0)/bins
-    bin_height = (ybound1 - ybound0)/bins
+    bins : int, optional
+        Number of bins in which to divide parameter space by. Increases resolution of
+        plot. Default is 20.
 
-    implausibilities = np.zeros((bins, bins))
-    xvals = np.linspace(xbound0,xbound1,bins)
-    yvals = np.linspace(ybound0,ybound1,bins)
+    Fig : (`~matplotlib.figure.Figure`, `~matplotlib.axes.Axes`), optional
+        If provided, plots on to the provided axis and figure. Default is None and will
+        instead initialise a figure.
 
-    for i in range(bins): # across y
-        ybin0 = ybound0 + i*bin_height
-        ybin1 = ybin0 + bin_height
-        # add mid of cell to list for plotting
-        for j in range(bins):  # across x
-            xbin0 = xbound0 + j*bin_width
-            xbin1 = xbin0 + bin_height
+    labels : (iterable (ndim,))
+        List of parameter names.
 
-            # find points within bin
-            y_indices = np.where(np.logical_and(input_imp[:,variables[1]]>=ybin0, input_imp[:,variables[1]]<ybin1))
-            x_indices = np.where(np.logical_and(input_imp[:,variables[0]]>=xbin0, input_imp[:,variables[0]]<xbin1))
-            bin_indices = np.intersect1d(x_indices, y_indices)
-            # find minimised implausibility over remaining dimensions
-            if bin_indices.shape[0] != 0:
-                implausibilities[i,j] = input_imp[bin_indices][:,-1].mean()
-            else:
-                implausibilities[i,j] = np.NaN
+    plot_kwargs : dict, optional
+        Additional keyword arguments passed to 'axes.contourf'.
 
-    if np.nanmax(implausibilities) > 3.5:
-        bounds=[0,0.5,1,1.5,2,2.5,3,3.5]
+    """
+
+
+    if Fig == None:
+        fig, ax = plt.subplots()
     else:
-        bounds = np.linspace(np.nanmin(implausibilities), np.nanmax(implausibilities), 8)
-    cmap = cm.get_cmap('viridis_r', len(bounds))
-
-    im = ax.contourf(xvals, yvals, implausibilities, levels=bounds, colors=[cmap(0), cmap(0.1), cmap(0.15), cmap(0.3), cmap(0.45), cmap(0.6), cmap(0.85), cmap(1)])
-    #im = ax.contourf(xvals, yvals, implausibilities, cmap='viridis_r')
-
-
-    ax.set_facecolor((68/255,1/255,84/255))
-    ax.set_xlim([parameter_bounds_initial[0,0], parameter_bounds_initial[0,1]])
-    ax.set_ylim([parameter_bounds_initial[1,0], parameter_bounds_initial[1,1]])
-    if region == 0:
-        cbar = fig.colorbar(im, ax=ax)
-        cbar.set_label('Implausibility')
-        im.set_clim(0,10)
-        ax.set_ylabel('y')
-        ax.set_xlabel('x')
-        ax.set_title('Wave ' + str(wave+1) + ' Implausibility')
-
-def implausibility(input_imp, parameter_bounds_initial, ax, fig, wave, region, variables, variable_names, bins=20):
-
+        fig, ax = Fig
 
     # split axis into bins
-    ybound0 = parameter_bounds_initial[variables[1], 0]
-    ybound1 = parameter_bounds_initial[variables[1], 1]
-    xbound0 = parameter_bounds_initial[variables[0], 0]
-    xbound1 = parameter_bounds_initial[variables[0], 1]
+    ybound0 = parameter_bounds[1, 0]
+    ybound1 = parameter_bounds[1, 1]
+    xbound0 = parameter_bounds[0, 0]
+    xbound1 = parameter_bounds[0, 1]
     bin_width = (xbound1 - xbound0)/bins
     bin_height = (ybound1 - ybound0)/bins
 
@@ -83,110 +75,103 @@ def implausibility(input_imp, parameter_bounds_initial, ax, fig, wave, region, v
             xbin1 = xbin0 + bin_height
 
             # find points within bin
-            y_indices = np.where(np.logical_and(input_imp[:,variables[1]]>=ybin0, input_imp[:,variables[1]]<ybin1))
-            x_indices = np.where(np.logical_and(input_imp[:,variables[0]]>=xbin0, input_imp[:,variables[0]]<xbin1))
+            y_indices = np.where(np.logical_and(samples[:,parameters[1]]>=ybin0, samples[:,parameters[1]]<ybin1))
+            x_indices = np.where(np.logical_and(samples[:,parameters[0]]>=xbin0, samples[:,parameters[0]]<xbin1))
             bin_indices = np.intersect1d(x_indices, y_indices)
             # find minimised implausibility over remaining dimensions
             if bin_indices.shape[0] != 0:
-                implausibilities[i,j] = input_imp[bin_indices][:,-1].min()
+                implausibilities[i,j] = samples[bin_indices][:,-1].min()
             else:
                 implausibilities[i,j] = np.NaN
 
-    #if np.nanmax(implausibilities) > 3.5:
-        #bounds=[0,0.5,1,1.5,2,2.5,3,3.5]
-    #else:
-        #bounds = np.linspace(np.nanmin(implausibilities), np.nanmax(implausibilities), 8)
-    bounds=[0,0.5,1,1.5,2,2.5,3,3.5]
-    cmap = cm.get_cmap('viridis_r', len(bounds))
+    
+    clevels=[0,0.5,1,1.5,2,2.5,3,3.5]
 
-    ax.contourf(xvals, yvals, implausibilities, levels=bounds, colors=[cmap(0), cmap(0.1), cmap(0.15), cmap(0.3), cmap(0.45), cmap(0.6), cmap(0.85), cmap(1)])
-    #im = ax.contourf(xvals, yvals, implausibilities, cmap='viridis_r')
+    if plot_kwargs is None:
+        plot_kwargs = dict()
+    if plot_kwargs.get('levels') is None:
+        plot_kwargs['levels'] = plot_kwargs.get('levels', clevels)
+
+    if plot_kwargs.get('cmap') is None:
+        colormap = 'viridis_r'
+        cmap = cm.get_cmap(colormap, len(clevels))
+        colorlist = [cmap(0), cmap(0.1), cmap(0.15), cmap(0.3), cmap(0.45), cmap(0.6), cmap(0.85), cmap(1)]
+        plot_kwargs['colors'] = plot_kwargs.get('colors', colorlist)
+    else:
+        cmap = cm.get_cmap(plot_kwargs.get('cmap'))
+
+    ax.set_facecolor(cmap(0.9999))
 
 
-    ax.set_facecolor((68/255,1/255,84/255))
-    ax.set_xlim([parameter_bounds_initial[0,0], parameter_bounds_initial[0,1]])
-    ax.set_ylim([parameter_bounds_initial[1,0], parameter_bounds_initial[1,1]])
+    im = ax.contourf(xvals, yvals, implausibilities, **plot_kwargs)
+
+    
+    ax.set_xlim([parameter_bounds[0,0], parameter_bounds[0,1]])
+    ax.set_ylim([parameter_bounds[1,0], parameter_bounds[1,1]])
+    
+    if labels:
+        ax.set_xlabel(labels[parameters[0]])
+        ax.set_ylabel(labels[parameters[1]])
     #cbar = fig.colorbar(im, ax=ax)
     #cbar.set_label('Implausibility')
-    #im.set_clim(0,10)
-    ax.set_ylabel(variable_names[1])
-    ax.set_xlabel(variable_names[0])
-    #cbar.remove()
+    #if colorbar == False:
+        #cbar.remove()
     #ax.set_title('Wave ' + str(wave+1) + ' Implausibility')
-    #if input_imp.shape[1] > 2:
-        #if variables[0] != input_imp.shape[1] - 2:
-            #ax.axes.xaxis.set_visible(False)
-        #if variables[1] != 0:
-            #ax.axes.yaxis.set_visible(False)
-    
+
     
 
-def nonimplausible_pts(input_train, nonimplausible, ax):
-# plot nonimplausible datapoints
 
-    # find nonimplausible boundaries
-    xmin = nonimplausible[:,0].min()
-    xmax = nonimplausible[:,0].max()
-    ymin = nonimplausible[:,1].min()
-    ymax = nonimplausible[:,1].max()
+def opticaldepth_2D(samples, parameter_bounds, parameters, bins=20, Fig=None, labels=None, plot_kwargs=None):
+    
+    """
+    Plots an optical depth plot for two parameters.
 
-    ax.scatter(nonimplausible[:,0], nonimplausible[:,1], s=2)
-    ax.set_title('Remaining Non-Implausible Datapoints')
-    ax.set_xlabel('x')
-    ax.set_ylabel('y')
-    ax.set_xlim([-2,2])
-    ax.set_ylim([-2,2])
-    ax.scatter(input_train[:,0], input_train[:,1], marker='x', color='black', label='Training Data')
-    ax.axhline(ymin, linestyle = '--', color='pink')
-    ax.axhline(ymax, linestyle = '--', color='pink')
-    ax.axvline(xmin, linestyle = '--', color='pink')
-    ax.axvline(xmax, linestyle = '--', color='pink')
-    ax.legend(loc='lower left')
+    Args
+    ----
+
+    samples : array of floats
+        (nsamples x ndim+1) size array of nsamples coordinates in parameter space and
+        each coordinates corresponding implausibility. An array of samples for each wave
+        is an attribute of the output of HistoryMatch.run(). The samples for each wave
+        can be accessed by indexing the array of samples.
+
+    parameter_bounds : array of floats
+        (ndim x 2) array containing the initial upper and lower bounds assigned to 
+        each parameter to be plotted.
+
+    parameters : array of ints
+        If ndim > 2, a (1 x 2) array of the parameters to plot is required. The two
+        values in the array are integers corresponding to parameters, following the
+        same order as parameter_bounds. The first variable in the array will be plotted
+        on the x-axis and the second variable on the y-axis.
+    
+    bins : int, optional
+        Number of bins in which to divide parameter space by. Increases resolution of
+        plot. Default is 20.
+
+    Fig : (`~matplotlib.figure.Figure`, `~matplotlib.axes.Axes`), optional
+        If provided, plots on to the provided axis and figure. Default is None and will
+        instead initialise a figure.
+
+    labels : (iterable (ndim,))
+        List of parameter names.
+
+    plot_kwargs : dict, optional
+        Additional keyword arguments passed to 'axes.contourf'.
+
+    """
 
 
-
-def optical_depth_1D(input_imp, bins, ax, fig, variable, variable_name, parameter_bounds_initial):
-    #print(nonimplausible[:,variable])
-    #ax.hist(nonimplausible[:,variable], bins=ngrid)
+    if Fig == None:
+        fig, ax = plt.subplots()
+    else:
+        fig, ax = Fig
 
     # split axis into bins
-    bound0 = parameter_bounds_initial[variable, 0]
-    bound1 = parameter_bounds_initial[variable, 1]
-    bin_size = (bound1 - bound0)/bins
-
-
-    bin_list = []
-    counts = []
-    initial_density = 0
-
-    for i in range(bins):
-        # define bin
-        bin0 = bound0 + i*bin_size
-        bin1 = bin0 + bin_size
-        bin_list.append(bin0 + (bin1-bin0)/2)
-        # find values within bin
-        indices = np.where(np.logical_and(input_imp[:,variable]>=bin0, input_imp[:,variable]<bin1))
-        # find initial density in this bin
-        initial_space = len(indices)
-        # for each bin, count nonimplausible values over remaining parameter volume
-        bin_count = np.count_nonzero(input_imp[indices,-1] < 3, axis=1)
-        counts.append(bin_count[0]/initial_space)
-
-    ax.bar(bin_list, counts, alpha=0.5)
-
-
-    if variable != input_imp.shape[1] - 2:
-        ax.axes.xaxis.set_visible(False)
-    if variable != 0:
-        ax.axes.yaxis.set_visible(False)
-    ax.set_xlim([-2,2])
-
-def optical_depth_2D(input_imp, parameter_bounds_initial, ax, fig, wave, variables, variable_names, bins=30):
-    # split axis into bins
-    ybound0 = parameter_bounds_initial[variables[1], 0]
-    ybound1 = parameter_bounds_initial[variables[1], 1]
-    xbound0 = parameter_bounds_initial[variables[0], 0]
-    xbound1 = parameter_bounds_initial[variables[0], 1]
+    ybound0 = parameter_bounds[1, 0]
+    ybound1 = parameter_bounds[1, 1]
+    xbound0 = parameter_bounds[0, 0]
+    xbound1 = parameter_bounds[0, 1]
     bin_width = (xbound1 - xbound0)/bins
     bin_height = (ybound1 - ybound0)/bins
 
@@ -203,14 +188,14 @@ def optical_depth_2D(input_imp, parameter_bounds_initial, ax, fig, wave, variabl
             xbin1 = xbin0 + bin_height
 
             # find points within bin
-            y_indices = np.where(np.logical_and(input_imp[:,variables[1]]>=ybin0, input_imp[:,variables[1]]<ybin1))
-            x_indices = np.where(np.logical_and(input_imp[:,variables[0]]>=xbin0, input_imp[:,variables[0]]<xbin1))
+            y_indices = np.where(np.logical_and(samples[:,parameters[1]]>=ybin0, samples[:,parameters[1]]<ybin1))
+            x_indices = np.where(np.logical_and(samples[:,parameters[0]]>=xbin0, samples[:,parameters[0]]<xbin1))
             bin_indices = np.intersect1d(x_indices, y_indices)
             # count nonimplausible points over remaining dimensions
-            n_pts = np.count_nonzero(input_imp[bin_indices][:,-1] < 3)
+            n_pts = np.count_nonzero(samples[bin_indices][:,-1] < 3)
             # find initial number of points 
-            y_indices_0 = np.where(np.logical_and(input_imp[:,variables[1]]>=ybin0, input_imp[:,variables[1]]<ybin1))
-            x_indices_0 = np.where(np.logical_and(input_imp[:,variables[0]]>=xbin0, input_imp[:,variables[0]]<xbin1))
+            y_indices_0 = np.where(np.logical_and(samples[:,parameters[1]]>=ybin0, samples[:,parameters[1]]<ybin1))
+            x_indices_0 = np.where(np.logical_and(samples[:,parameters[0]]>=xbin0, samples[:,parameters[0]]<xbin1))
             bin_indices_0 = np.intersect1d(x_indices_0, y_indices_0)
 
             if len(bin_indices_0) != 0:
@@ -221,106 +206,178 @@ def optical_depth_2D(input_imp, parameter_bounds_initial, ax, fig, wave, variabl
 
     
     #bounds=np.linspace(np.amin(densities), np.amax(densities), 8)
-    bounds = [0,0.05,0.1,0.2,0.3,0.4,0.5,0.6]
-    cmap = cm.get_cmap('magma', len(bounds))
-    #print(np.amin(densities))
-    #print(np.amax(densities))
-    im = ax.contourf(xvals, yvals, densities, levels=bounds, colors=[cmap(0), cmap(0.1), cmap(0.15), cmap(0.3), cmap(0.45), cmap(0.6), cmap(0.85), cmap(1)])
-    #im = ax.contourf(xvals, yvals, densities, cmap='viridis_r')
+    clevels = [0,0.05,0.1,0.2,0.3,0.4,0.5,0.6]
+
+    if plot_kwargs is None:
+        plot_kwargs = dict()
+    
+    plot_kwargs['cmap'] = plot_kwargs.get('cmap', 'magma')
+
+    cmap = cm.get_cmap(plot_kwargs.get('cmap'))
+
+    im = ax.contourf(xvals, yvals, densities, **plot_kwargs)
+
+    ax.set_facecolor(cmap(0))
 
 
-    #im =  ax.tricontourf(input_test[:,variables[1]],input_test[:,variables[0]],implaus, levels=[0, 0.5, 1, 2.5, 2.6, 2.7, 3], cmap='viridis_r')
+    ax.set_xlim([parameter_bounds[0,0], parameter_bounds[0,1]])
+    ax.set_ylim([parameter_bounds[1,0], parameter_bounds[1,1]])
+    if labels:
+        ax.set_xlabel(labels[parameters[0]])
+        ax.set_ylabel(labels[parameters[1]])
 
-    ax.set_facecolor((68/255,1/255,84/255))
-    ax.set_xlim([parameter_bounds_initial[0,0], parameter_bounds_initial[0,1]])
-    ax.set_ylim([parameter_bounds_initial[1,0], parameter_bounds_initial[1,1]])
-    #cbar = fig.colorbar(im, ax=ax)
-    #cbar.set_label('Implausibility')
-    #im.set_clim(0,10)
-    #ax.set_ylabel(variable_names[1])
-    #ax.set_xlabel(variable_names[0])
-    #cbar.remove()
-    #ax.set_title('Wave ' + str(wave+1) + ' Implausibility')
-    #if variables[0] != input_imp.shape[1] - 2:
-        #ax.axes.xaxis.set_visible(False)
-    #if variables[1] != 0:
-        #ax.axes.yaxis.set_visible(False)
-    ax.axis('off')
 
-def plot_ellipsoid(ell, ax):
-    """Plot the 3-d Ellipsoid ell on the Axes3D ax."""
 
-    # points on unit sphere
-    u = np.linspace(0.0, 2.0 * np.pi, 100)
-    v = np.linspace(0.0, np.pi, 100)
-    z = np.outer(np.cos(u), np.sin(v))
-    y = np.outer(np.sin(u), np.sin(v))
-    x = np.outer(np.ones_like(u), np.cos(v))
-    print(np.linalg.inv(ell.a))
-    # transform points to ellipsoid
-    for i in range(len(x)):
-        for j in range(len(x)):
-            x[i,j], y[i,j] = ell.ctr + np.dot(ell.axes,
-                                                      [x[i,j],y[i,j]])
 
-    ax.plot(x, y, color='#2980b9', alpha=0.2)
-
-def get_cov_ellipse(cov, centre, nstd, ax, color):
-    """
-    Return a matplotlib Ellipse patch representing the covariance matrix
-    cov centred at centre and scaled by the factor nstd.
+def plotcorner(samples, parameter_bounds, ndim, bins=20, Fig=None, colorbar=False,
+                show_axes = 'all', labels=None, plot1D_kwargs=None, plot2D_kwargs=None):
 
     """
+    Plots a corner plot of 2-d implausibility plots for all parameters,
+    for a particular wave.
 
-    # Find and sort eigenvalues and eigenvectors into descending order
-    eigvals, eigvecs = np.linalg.eigh(cov)
-    order = eigvals.argsort()[::-1]
-    eigvals, eigvecs = eigvals[order], eigvecs[:, order]
+    Args
+    ----
+    samples : array of floats
+        (nsamples x ndim+1) size array of nsamples coordinates in parameter space and
+        each coordinates corresponding implausibility. An array of samples for each wave
+        is an attribute of the output of HistoryMatch.run(). The samples for each wave
+        can be accessed by indexing the array of samples.jh
 
-    # The anti-clockwise angle to rotate our ellipse by 
-    vx, vy = eigvecs[:,0][0], eigvecs[:,0][1]
-    theta = np.arctan2(vy, vx)
+    parameter_bounds : array of floats
+        (ndim x 2) array containing the initial upper and lower bounds assigned to 
+        each parameter to be plotted.
 
-    # Width and height of ellipse to draw
-    width, height = 2 * nstd * np.sqrt(np.abs(eigvals))
-    
-    t = np.linspace(0, 2*np.pi, 100)
-    Ell = np.array([0.5*width*np.cos(t) , 0.5*height*np.sin(t)]) 
-    R_rot = np.array([[np.cos(theta) , -np.sin(theta)],[np.sin(theta), np.cos(theta)]])  
-    Ell_rot = np.zeros((2,Ell.shape[1]))
-    for i in range(Ell.shape[1]):
-        Ell_rot[:,i] = np.dot(R_rot,Ell[:,i])
-    
-    ax.plot(centre[0]+Ell_rot[0,:] , centre[1]+Ell_rot[1,:], color=color)
-    ax.scatter(centre[0], centre[1], marker='x', color=color)
+    bins : int, optional
+        Number of bins in which to divide parameter space by. Increases resolution of
+        plot. Default is 20.
+
+    Fig : (`~matplotlib.figure.Figure`, `~matplotlib.axes.Axes`), optional
+        If provided, plots on to the provided axis and figure. Default is None and will
+        instead initialise a figure.
+
+    colorbar : bool
+        Option to include a colorbar in the plot. Default is False.
+
+    show_axes : str
+        'all' shows all axes and labels. 'edge' shows axes and labels of outer edges.
+        'None' shows no axes and labels.
+
+    labels : (iterable (ndim,))
+        List of parameter names.
+
+    plot1D_kwargs : dict, optional
+        Additional keyword arguments passed to 'axes.bar' for use in the 1d optical
+        depth plots.
+
+    plot2D_kwargs : dict, optional
+        Additional keyword arguments passed to 'axes.contourf' for use in the 2d plots.
         
-    #return Ellipse(xy=centre, width=width, height=height,
-                   #angle=np.degrees(theta), **kwargs)
 
+    
+    """
 
-def plot_ellipses(fig, parameter_bounds, true_parameters, H, theta_best, theta_vals, color):
-    theta_names = [r'$\theta_{1}$', r'$\theta_{2}$', r'$\theta_{3}$']
-    N = len(theta_best)
-    for i in range(N):
-        for j in range(N):
-            ax = fig.axes[i + N*j]
-            if i != 0:
+    if Fig == None:
+        fig, axes = plt.subplots(ndim,ndim,figsize=(10,10))
+    else:
+        fig, axes = Fig
+
+    for j in range(ndim):
+        for i in range(ndim):
+            ax = axes[j,i]
+            #fig.add_subplot(ndim, ndim, (1+i+ndim*j), sharey='row')
+            if show_axes == None:
+                ax.axes.xaxis.set_visible(False)
                 ax.axes.yaxis.set_visible(False)
-                
+                plt.subplots_adjust(wspace=0.1, hspace=0.1)
+            parameters = [i,j]
             if i == j:
-                if color == 'mediumaquamarine':
-                    ax_right = ax.twinx()
-                    ax_right.plot(theta_vals[i], stats.norm.pdf(theta_vals[i], theta_best[i], np.sqrt(H[i,i])), color=color)
-                    ax_right.set_title(str(theta_names[i]) + '=' + str(round(theta_best[i], 2)), fontsize=14)
-                
+                ax.axes.yaxis.set_visible(False)
+                opticaldepth_1D(samples, parameter_bounds[i], parameter=i, bins=bins, Fig=(fig,ax), labels=labels)
             elif i < j:
-                
-                cov_matrix = np.array([[H[i,i], H[i,j]],[H[j,i], H[j,j]]])
-                get_cov_ellipse(cov_matrix, [theta_best[i], theta_best[j]], 3, ax, color)
-                ax.set_ylabel(theta_names[j])
-                ax.set_xlabel(theta_names[i])
-                ax.set_xlim([parameter_bounds[i,0], parameter_bounds[i,1]])
-                ax.set_ylim([parameter_bounds[j,0], parameter_bounds[j,1]])
-                
+                plot_implausibility2D(samples, parameter_bounds[[i,j]], [i,j], bins, (fig,ax), colorbar=colorbar, labels=labels, plot_kwargs=plot1D_kwargs)
             else:
-                ax.axis('off')
+                opticaldepth_2D(samples, parameter_bounds[[i,j]], [i,j], bins, (fig,ax), colorbar=colorbar, labels=labels, plot_kwargs=plot2D_kwargs)
+    
+    plt.tight_layout()
+
+
+
+
+def opticaldepth_1D(samples, parameter_bounds, parameter, bins=20, Fig=None, label=None, plot_kwargs=None):
+
+    """
+    Plots the optical depth for a single parameter, for a specified wave.
+
+    Args
+    ----
+
+    samples : array of floats
+        (nsamples x ndim+1) size array of nsamples coordinates in parameter space and
+        each coordinates corresponding implausibility. An array of samples for each wave
+        is an attribute of the output of HistoryMatch.run(). The samples for each wave
+        can be accessed by indexing the array of samples.
+
+    parameter_bounds : array of floats
+        (1 x 2) array containing the initial upper and lower bounds assigned to 
+        the parameter to be plotted.
+
+    parameter : int
+        The index of the parameter to be plotted, corresponding to a column in samples.
+    
+    bins : int, optional
+        Number of bins in which to divide parameter space by, in order to evaluate density
+        of points. Default is 20.
+
+    fig : (`~matplotlib.figure.Figure`, `~matplotlib.axes.Axes`), optional
+        If provided, plots on to the provided axis and figure. Default is None and will
+        instead initialise a figure.
+
+    label : str, optional
+        Name of parameter
+
+    plot_kwargs : dict, optional
+        Additional keyword arguments passed to 'axes.bar'.
+    
+    """
+
+    if Fig == None:
+        fig = plt.figure()
+    else:
+        fig, ax = Fig
+
+    
+
+    # split axis into bins
+    xmin = parameter_bounds[0]
+    xmax = parameter_bounds[1]
+    bin_size = (xmax - xmin)/bins
+
+    counts = []
+    initial_density = 0
+
+    for i in range(bins):
+        # define bin
+        bin_min = xmin + i*bin_size
+        bin_max = bin_min + bin_size
+        # find values within bin
+        indices = np.where(np.logical_and(samples[:,parameter]>=bin_min, samples[:,parameter]<bin_max))
+        # find initial density in this bin
+        density_0 = len(indices)
+        # for each bin, count nonimplausible values over remaining parameter volume
+        bin_count = np.count_nonzero(samples[indices,-1] < 3, axis=1)
+        if density_0 != 0:
+            counts.append(bin_count[0]/density_0)
+        else:
+            counts.append(np.NanN)
+
+    if plot_kwargs is None:
+        plot_kwargs = dict()
+
+    plot_kwargs['width'] = plot_kwargs.get('width', bin_size)
+    plot_kwargs['align'] = plot_kwargs.get('align', 'edge')
+
+    ax.bar(np.arange(xmin, xmax, bin_size), counts, **plot_kwargs)
+
+    if labels:
+        ax.set_xlabel(labels[parameter])

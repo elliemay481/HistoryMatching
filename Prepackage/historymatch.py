@@ -1,245 +1,223 @@
 import numpy as np
-import emulator
 import matplotlib.pyplot as plt
-import random
-import matplotlib.gridspec as gridspec
-from scipy.stats import norm, uniform
-from scipy import stats
-import nestle
 
+#import random
+#import matplotlib.gridspec as gridspec
+#from scipy.stats import norm, uniform
+#from scipy import stats
+#import nestle
+
+import emulators
 import plot
+import utils
 import data
 
+class Results(dict):
+    """
+    For accessing the outputs of the history match.
+    """
 
-# define implausibility measure
-def implausibility(E, z, var, var_md, var_obs):
+    def __getattribute__(self, name):
+        """ Returns attribute of history matching results."""
+        attr = self[name]
+        if not attr:
+           raise AttributeError(f'{self.__class__.__name__}.{name} does not exist.')
+        return attr
+
+
+
+
+class HistoryMatch:
+
+    """
+
+    Args
+    ----
+    obs_data : array
+        1-d array of observational data. Each element of the array corresponds to a model output.
     
-    # E - emulator expectation
-    # z - observational data
-    # var_em - emulator_uncertainty
-    # var_md - model discrepency error
-    # var_obs - observational error
+    ndim : int
+        Number of unknown parameters.
     
-    return np.sqrt( ( E - z )**2  /  ( var + var_md + var_obs ) )
+    model : list of functions
+        List of functions representing the true model of the system.
+        The input of the functions are the ndim unknown parameters.
 
+    emulator : {'GP', 'EC'}
+        Type of emulator used to emulate the model. Choices are Gaussian process
+        ('GP') and eigenvector continuation ('EC').
 
-def find_bounding_ellipse(points, volume=None):
+    volume_shape : {'hypercube', 'ellipsoid'}
+        Determines the final shape of the nonimplausible parameter volume.
 
-    ells = nestle.bounding_ellipsoid(points, volume)
-    cov = np.linalg.inv(ells.a)
-    return ells.ctr, cov, ells
-
-def find_bounding_ellipses(points, volume=None):
-
-    ell_list = []
-    ctr_list = []
-    cov_list = []
-    ells = nestle.bounding_ellipsoids(points, volume)
-    for i in range(len(ells)):
-        ctr_list.append(ells[i].ctr)
-        cov = np.linalg.inv(ells[i].a)
-        cov_list.append(cov)
-    return ctr_list, cov_list, ells
-
-
-
-
-def sample_volume(ndim, covariance, nsamples, ellipse):
-
-    C = covariance
-    Cinv = np.linalg.inv(C)
-
-    lnorm = -0.5 * (np.log(2 * np.pi) * ndim + np.log(np.linalg.det(C)))
-
-    def prior(x):
-        return 2. * (2. * x - 1.)
-
-    def loglikelihood(x):
-        """Multivariate normal log-likelihood."""
-        return -0.5 * np.dot(x, np.dot(Cinv, x)) + lnorm
-
-    res = nestle.sample(loglikelihood, prior, ndim=ndim, npoints=nsamples, method='single')
-
-    return ellipse.samples(nsamples)
-
-    #return res.samples
-
-
-def history_match(true_model, obs_data, xvals, kernel, ndim, Nsamples, Ntraining, parameter_bounds, var_method, var_exp, sigma_cov, beta, theta, sigma_n, H, true_thetas, noise=False, waves=1):
+    bounds : array of floats
+        (ndim x 2) array containing the upper and lower bounds for each parameter.
     
-    '''
-        xvals: (1xNx) array of independent variable values
-        obs_data = (Nfunc x Nx) array of function outputs
-    '''
+    nwaves : int, optional
+        Number of history matching waves to complete. If None (default is None)
+        scheme will continue until termination conditions are met. Number
+        of waves may be less than nwaves if conditions reached earlier.
 
-    Nx = len(xvals)      # number of independent variable, x, values
-    Nfunc = len(true_model)
+    ntraining : int, optional
 
-    fig, axes = plt.subplots(waves, 1, figsize=(10, 10*waves))
-    gs0 = gridspec.GridSpec(waves, 1)
+    nsamples : int, optional
+
+    """
     
-    ax_list = fig.axes
+    def __init__(self, obs_data, ndim, model, emulator, volume_shape, bounds,
+                    var_obs, var_method, ntraining=None, nsamples=None):
 
-    color_list = ['plum', 'mediumaquamarine']
+        self.Z = obs_data
+        self.ndim = ndim
+        self.bounds = bounds
+        self.model = model
+        self.noutputs = len(obs_data)
+        self.var_obs = var_obs
+        self.var_method = var_method
 
-    parameter_bounds_initial = parameter_bounds
+        self.emulator_choice = emulator
 
+        if ntraining:
+            self.ntraining = ntraining
+        else:
+            self.ntraining = 20*ndim
 
-    for k in range(waves):
+        if nsamples:
+            self.nsamples = nsamples
+        else:
+            self.nsamples = 5000*ndim
 
-        print('Current wave: ' + str(k+1))
+        self.shape = volume_shape
 
-        ax_list[k].axis('off')
-        gs00 = gridspec.GridSpecFromSubplotSpec(ndim, ndim, subplot_spec=gs0[k], wspace=0.1, hspace=0.1)
-        p1axes = np.empty((ndim,ndim), dtype=object)
-        for i in range(ndim):
-            for j in range(ndim):
-                p1axes[i,j] = fig.add_subplot(gs00[i, j])
+    def implausibility(self, E, z_i, var_em, var_method, var_obs):
 
-        # for each x value, need a separate emulator. can use same train and test regions
-        # for parameters though
-        # generate initial well spaced inputs for train and test sets
-        if k == 0:
-            theta_train, theta_test = data.prepare_data(ndim, Nsamples, Ntraining, parameter_bounds)
-        # each model will have Nx outputs, so will have Nx*number of models outputs in total
-        implausibility_all = np.zeros((Nsamples, Nx*Nfunc))
+        """
+        Evaluates the implausibility measure given emulator output and observational
+        data.
 
-        for m in range(len(true_model)):
-            true_function = true_model[m]
+        Args
+        ----
+        E : array
+            Expectation values given as output from the emulator
 
-            # then iterate over x values
-            for x in range(len(xvals)):
+        z_i : float
+            Observational datapoint
 
-                xval = xvals[x]
+        var_em : float
+            Variance of emulator uncertainty
 
-                # generate training outputs
-                z_train = true_function(xval, *theta_train.T)
-                # artificially add noise to observations
-                #z_train += np.random.normal(0,var_exp, Ntraining)
+        var_method : float
+            Variance of method uncertainty
 
-                # **** for testing without emulator *****
-                #mu = true_function(xval, *theta_test.T)
-                #sd = np.zeros(len(theta_test))
+        var_obs : float
+            Variance of observational uncertainty
 
-                # build emulator over nonimplausible region
-                GP = emulator.Gaussian_Process(theta_train, theta_test, z_train, sigma_cov, beta, theta, kernel, noise, sigma_n)
-                # optimise hyperparameters of emulator
-                #GP.optimise()
-                # fit emulator using training points
-                mu, cov, sd = GP.emulate()
+        va
 
-                # evaluate implausibility over parameter volume
-                for i in range(len(theta_test)):
-                    implausibility_all[i, x+(Nx*m)] = implausibility(mu[i], obs_data[m, x], sd[i], var_method, var_exp)
-
-
-        # choose maximum (or second maximum) implausibility
-        # get index of maximum implaus for all outputs
-        max_I = np.argmax(implausibility_all, axis=1)
-        # get index of second highest maximum implaus for all outputs
-        max2_I = implausibility_all.argsort()[:,-2]
-        implausibilities = implausibility_all[range(len(max2_I)), max2_I]
-
-        # identify nonimplausible region
-        samples_implaus = np.concatenate((theta_test, implausibilities.reshape(-1,1)), axis=1)
-        nonimplausible = np.delete(samples_implaus, np.where(samples_implaus[:,-1] > 3), axis=0)
-
-        # find single ellipse
-        #ctr_list, cov_list, ells = find_bounding_ellipses(nonimplausible[:,:ndim], 0)
-
-        # find multiple ellipses
-        ctr_list, cov_list, ells = find_bounding_ellipses(nonimplausible[:,:ndim], 0)
-
-        ctr = ctr_list[0]
-        cov = cov_list[0]
-        ell = ells[0]
-
-        theta_train = np.empty((0,3))
-        theta_test = np.empty((0,3))
-
-        print(len(ells))
-        for ellipse in range(len(ells)):
-            ctr = ctr_list[ellipse]
-            cov = cov_list[ellipse]
-            ell = ells[ellipse]
-
-            # sample new implausible volume
-            theta_train_i = sample_volume(ndim, cov, nsamples=int(np.ceil(Ntraining/len(ells))), ellipse=ell)
-            theta_test_i = sample_volume(ndim, cov, nsamples=int(np.ceil(Nsamples/len(ells))), ellipse=ell)
-
-            theta_train = np.concatenate((theta_train, theta_train_i), axis=0)
-            theta_test = np.concatenate((theta_test, theta_test_i), axis=0)
+        """
         
-        # plot implausibilities and optical depth
-        variable_names = [r'$\theta_{1}$', r'$\theta_{2}$', r'$\theta_{3}$']
-        for i in range(ndim):
-            for j in range(ndim):
-                ax = p1axes[i,j]
-                variables = [i,j]
-                if i == j:
-                    if i == 0:
-                        ax.set_ylabel(variable_names[i])
-                    elif i == ndim-1:
-                        ax.set_xlabel(variable_names[i])
-                    plot.optical_depth_1D(samples_implaus, 20, ax, fig, i, variable_names[i], parameter_bounds_initial)
-                    ax_right = ax.twinx()
-                    ax_right2 = ax.twinx()
-                    theta_vals = np.linspace(parameter_bounds_initial[i,0], parameter_bounds_initial[i,1], 100)
-                    ax_right.plot(theta_vals, stats.norm.pdf(theta_vals, true_thetas[0][i], np.sqrt(H[0][i,i])), color=color_list[0])
-                    ax_right2.plot(theta_vals, stats.norm.pdf(theta_vals, true_thetas[1][i], np.sqrt(H[1][i,i])), color=color_list[1])
-                    
-                    '''if i < ndim-1:
-                        if i == 0:
-                            ax.set_ylabel(variable_names[i])
-                        ax.scatter(nonimplausible[:,i], nonimplausible[:,i+1], s=1)
-                        ax.set_xlim([parameter_bounds_initial[i,0], parameter_bounds_initial[i,1]])
-                        ax.set_ylim([parameter_bounds_initial[i+1,0], parameter_bounds_initial[i+1,1]])
-                        for ellipse in range(len(ells)):
-                            ctr = ctr_list[ellipse]
-                            cov = cov_list[ellipse]
-                            ell = ells[ellipse]
-                            covi = np.array([[cov[i,i], cov[i,i+1]],[cov[i+1,i], cov[i+1,i+1]]])
-                            plot.get_cov_ellipse(covi, [ctr[i],ctr[i+1]], 1, ax, color='red')
-                            ax.scatter(theta_train[:,i], theta_train[:,i+1], marker='x', color='limegreen')
-                    else:
-                        ax.scatter(nonimplausible[:,0], nonimplausible[:,i], color='cornflowerblue', s=1)
-                        ax.set_xlim([parameter_bounds_initial[0,0], parameter_bounds_initial[0,1]])
-                        ax.set_ylim([parameter_bounds_initial[i,0], parameter_bounds_initial[i,1]])
-                        for ellipse in range(len(ells)):
-                            ctr = ctr_list[ellipse]
-                            cov = cov_list[ellipse]
-                            ell = ells[ellipse]
-                            covi = np.array([[cov[0,0], cov[0,i]],[cov[i,0], cov[i,i]]])
-                            plot.get_cov_ellipse(covi, [ctr[0],ctr[i]], 1, ax, color='red')
-                            ax.set_xlabel(variable_names[i])
-                            ax.scatter(theta_train[:,0], theta_train[:,i], marker='x', color='limegreen')'''
-                    
+        # E - emulator expectation
+        # z - observational data
+        # var_em - emulator_uncertainty
+        # var_md - model discrepency error
+        # var_obs - observational error
+    
+        return np.sqrt( ( E - z_i )**2  /  ( var_em + var_method + var_obs ) )
 
-                elif i > j:
-                    #plot.implausibility_2D(samples_implaus, parameter_bounds_initial, ax1, fig1, k, n, variables, [variable_names[j], variable_names[i]])
-                    plot.implausibility(samples_implaus, parameter_bounds_initial, ax , fig, k, 0, [j,i], 
-                            [variable_names[j], variable_names[i]], bins=30)
-                    for m in range(len(true_model)):
-                        ax.scatter(true_thetas[m][j],true_thetas[m][i], color='red', marker='x')
-                #ax1.scatter(true_parameters[j], true_parameters[i], color='red', marker='x', label='Observed Data' if n == 0 else "")
-                else:
-                    plot.optical_depth_2D(samples_implaus, parameter_bounds_initial, ax, fig, k, [j,i], [variable_names[j], variable_names[i]])
-                    #cov_matrix2 = np.array([[cov[i,i], cov[i,j]],[cov[j,i], cov[j,j]]])
-                    #plot.get_cov_ellipse(cov_matrix2, [ctr[i],ctr[j]], 1, ax, 'red')
-                    #for m in range(len(true_model)):
-                        #cov_matrix = np.array([[H[m][i,i], H[m][i,j]],[H[m][j,i], H[m][j,j]]])
-                        #plot.get_cov_ellipse(cov_matrix, [true_thetas[m][i],true_thetas[m][j]], 3, ax, color_list[m])
-                        #ax.set_xlim([parameter_bounds_initial[i,0], parameter_bounds_initial[i,1]])
-                        #ax.set_ylim([parameter_bounds_initial[j,0], parameter_bounds_initial[j,1]])
-        
 
-        # if no points left in implausible region, end
-        if nonimplausible.size == 0:
-                print('Nonimplausible region empty')
-                return None
+    def wave(self, bounds):
 
-    fig.savefig('implausibility_plots_multi_ellipse.png')
+        theta_train, theta_test = data.prepare_data(self.ndim, self.nsamples, self.ntraining, self.bounds)
 
-    return ctr, cov, nonimplausible, ell
+        implausibilities_all = np.zeros((self.nsamples, self.noutputs))
+
+        for output in range(self.noutputs):
+
+            Ztrain = self.model[output](*theta_train.T)
+
+            if self.emulator_choice == 'GP':
+                GP = emulators.Gaussian_Process(theta_train, theta_test, Ztrain)
+            elif self.emulator_choice == 'EC':
+                print('EC not yet developed')
 
             
+            GP.optimize()
+            mu, cov, sd = GP.emulate()
+
+
+            for i in range(len(theta_test)):
+                implausibilities_all[i, output] = self.implausibility(mu[i], self.Z[output], sd[i], self.var_method, self.var_obs)
+        
+    
+        # get index of second highest maximum implaus for all outputs
+        max_I = implausibilities_all.argsort()[:,-2]
+        implausibilities = implausibilities_all[range(len(max_I)), max_I]
+
+        samples = np.concatenate((theta_test, implausibilities.reshape(-1,1)), axis=1)
+        nonimplausible = np.delete(samples, np.where(samples[:,-1] > 3), axis=0)
+
+        if self.shape == 'hypercube':
+            nonimplausible_bounds = locate_boundaries(nonimplausible, ndim)
+        else:
+            print('elliptical not developed yet')
+
+        return nonimplausible_bounds, nonimplausible, samples
+
+
+
+    def run(self, nwaves):
+
+        """
+        Performs waves of history matching to find nonimplausible parameter space.
+
+        Returns
+        -------
+        result: 'Result'
+            Dictionary containing results of each wave
+
+        """
+
+        if nwaves:
+            self.nwaves = nwaves
+        else:
+            self.nwaves = 1
+
+        # run number of waves. in each wave:
+            # for each output in obs_data, emulate and evaluate implausibility
+            # then combine to determine max implausibility
+            # either find ellipses or cutoffs
+            # construct new nonimplaus region
+            # save results of wave
+
+        # initialise training set and parameter space
+        #theta_train, theta_test = data.prepare_data(self.ndim, self.nsamples, self.ntraining, self.bounds)
+        nonimplausible_bounds = self.bounds
+
+        # calculate initial parameter volume
+        initial_volume = utils.hypercube_volume(self.ndim, self.bounds)
+        
+        bounds_list = []
+        nonimp_region_list = []
+        sample_list = []
+
+        nonimplausible_bounds = self.bounds
+
+        for wave in range(self.nwaves):
+            print('Running wave ' + str(wave+1))
+            nonimplausible_bounds, nonimplausible_region, samples = self.wave(nonimplausible_bounds)
+            
+            bounds_list.append(nonimplausible_bounds)
+            nonimp_region_list.append(nonimplausible_region)
+            sample_list.append(samples)
+
+            nonimplausible_volume = utils.hypercube_volume(self.ndim, nonimplausible_bounds)
+            print('Relative nonimplausible volume remaining: ' + str(round(nonimplausible_volume/initial_volume,3)))
+
+        return Results({'bounds': bounds_list, 'regions': nonimp_region_list, 'samples': sample_list})
+
+            
+
+            
+
+            
+                
