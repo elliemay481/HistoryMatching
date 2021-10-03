@@ -7,7 +7,7 @@ from scipy.stats import norm, uniform
 import scipy.optimize
 
 
-def plot_implausibility2D(samples, parameter_bounds, parameters, bins=20, Fig=None,
+def plot_implausibility2D(samples, parameter_bounds, parameters, bins=20, Fig=None, colorbar=False, 
                             labels=None, plot_kwargs=None):
 
     """
@@ -18,7 +18,7 @@ def plot_implausibility2D(samples, parameter_bounds, parameters, bins=20, Fig=No
 
     samples : array of floats
         (nsamples x ndim+1) size array of nsamples coordinates in parameter space and
-        each coordinates corresponding implausibility. An array of samples for each wave
+        each coordinate's corresponding implausibility. An array of samples for each wave
         is an attribute of the output of HistoryMatch.run(). The samples for each wave
         can be accessed by indexing the array of samples.
 
@@ -121,7 +121,7 @@ def plot_implausibility2D(samples, parameter_bounds, parameters, bins=20, Fig=No
     
 
 
-def opticaldepth_2D(samples, parameter_bounds, parameters, bins=20, Fig=None, labels=None, plot_kwargs=None):
+def opticaldepth_2D(samples, parameter_bounds, parameters, bins=20, Fig=None, colorbar=False, labels=None, plot_kwargs=None):
     
     """
     Plots an optical depth plot for two parameters.
@@ -293,7 +293,7 @@ def plotcorner(samples, parameter_bounds, ndim, bins=20, Fig=None, colorbar=Fals
             parameters = [i,j]
             if i == j:
                 ax.axes.yaxis.set_visible(False)
-                opticaldepth_1D(samples, parameter_bounds[i], parameter=i, bins=bins, Fig=(fig,ax), labels=labels)
+                opticaldepth_1D(samples, parameter_bounds[i], parameter=i, bins=bins, Fig=(fig,ax), label=labels[i])
             elif i < j:
                 plot_implausibility2D(samples, parameter_bounds[[i,j]], [i,j], bins, (fig,ax), colorbar=colorbar, labels=labels, plot_kwargs=plot1D_kwargs)
             else:
@@ -379,5 +379,5 @@ def opticaldepth_1D(samples, parameter_bounds, parameter, bins=20, Fig=None, lab
 
     ax.bar(np.arange(xmin, xmax, bin_size), counts, **plot_kwargs)
 
-    if labels:
-        ax.set_xlabel(labels[parameter])
+    if label:
+        ax.set_xlabel(label)

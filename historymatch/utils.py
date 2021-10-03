@@ -4,6 +4,8 @@ Collection of helper functions.
 
 """
 
+import numpy as np
+
 def hypercube_volume(ndim, bounds):
         volume = 1
         for i in range(ndim):

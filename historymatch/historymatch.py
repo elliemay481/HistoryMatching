@@ -1,16 +1,12 @@
+# external imports
 import numpy as np
 import matplotlib.pyplot as plt
 
-#import random
-#import matplotlib.gridspec as gridspec
-#from scipy.stats import norm, uniform
-#from scipy import stats
-#import nestle
-
+# internal imports
 import emulators
 import plot
 import utils
-import data
+import sample
 
 class Results(dict):
     """
@@ -125,9 +121,7 @@ class HistoryMatch:
         return np.sqrt( ( E - z_i )**2  /  ( var_em + var_method + var_obs ) )
 
 
-    def wave(self, bounds):
-
-        theta_train, theta_test = data.prepare_data(self.ndim, self.nsamples, self.ntraining, self.bounds)
+    def wave(self, bounds, theta_train, theta_test):
 
         implausibilities_all = np.zeros((self.nsamples, self.noutputs))
 
@@ -144,6 +138,7 @@ class HistoryMatch:
             GP.optimize()
             mu, cov, sd = GP.emulate()
 
+            
 
             for i in range(len(theta_test)):
                 implausibilities_all[i, output] = self.implausibility(mu[i], self.Z[output], sd[i], self.var_method, self.var_obs)
@@ -157,9 +152,10 @@ class HistoryMatch:
         nonimplausible = np.delete(samples, np.where(samples[:,-1] > 3), axis=0)
 
         if self.shape == 'hypercube':
-            nonimplausible_bounds = locate_boundaries(nonimplausible, ndim)
+            nonimplausible_bounds = utils.locate_boundaries(nonimplausible, self.ndim)
         else:
-            print('elliptical not developed yet')
+            # ****** fix **********
+            nonimplausible_bounds = utils.locate_boundaries(nonimplausible, self.ndim)
 
         return nonimplausible_bounds, nonimplausible, samples
 
@@ -183,14 +179,9 @@ class HistoryMatch:
             self.nwaves = 1
 
         # run number of waves. in each wave:
-            # for each output in obs_data, emulate and evaluate implausibility
-            # then combine to determine max implausibility
-            # either find ellipses or cutoffs
-            # construct new nonimplaus region
-            # save results of wave
 
         # initialise training set and parameter space
-        #theta_train, theta_test = data.prepare_data(self.ndim, self.nsamples, self.ntraining, self.bounds)
+        theta_train, theta_test = sample.hypercube_sample(self.ndim, self.nsamples, self.ntraining, self.bounds)
         nonimplausible_bounds = self.bounds
 
         # calculate initial parameter volume
@@ -199,13 +190,25 @@ class HistoryMatch:
         bounds_list = []
         nonimp_region_list = []
         sample_list = []
+        test_list = []
 
         nonimplausible_bounds = self.bounds
 
         for wave in range(self.nwaves):
             print('Running wave ' + str(wave+1))
-            nonimplausible_bounds, nonimplausible_region, samples = self.wave(nonimplausible_bounds)
+
+            test_list.append(theta_test)
+                
+            # run history matching wave
+            nonimplausible_bounds, nonimplausible_region, samples = self.wave(nonimplausible_bounds, theta_train, theta_test)
             
+            # generate well space samples in parameter space
+            if self.shape == 'hypercube':
+                theta_train, theta_test = sample.hypercube_sample(self.ndim, self.nsamples, self.ntraining, self.bounds)
+            elif self.shape == 'ellipsoid':
+                theta_train, theta_test = sample.ellipsoid_sample(self.ndim, nonimplausible_region[:,:-1], self.nsamples, self.ntraining)
+            
+            print(nonimplausible_bounds)
             bounds_list.append(nonimplausible_bounds)
             nonimp_region_list.append(nonimplausible_region)
             sample_list.append(samples)
@@ -213,7 +216,7 @@ class HistoryMatch:
             nonimplausible_volume = utils.hypercube_volume(self.ndim, nonimplausible_bounds)
             print('Relative nonimplausible volume remaining: ' + str(round(nonimplausible_volume/initial_volume,3)))
 
-        return Results({'bounds': bounds_list, 'regions': nonimp_region_list, 'samples': sample_list})
+        return Results({'bounds': bounds_list, 'regions': nonimp_region_list, 'samples': sample_list, 'test_pts': test_list})
 
             
 

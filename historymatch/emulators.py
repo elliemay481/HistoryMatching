@@ -1,6 +1,5 @@
 import numpy as np
 from scipy.optimize import minimize
-import kernels
 
 class Gaussian_Process:
     """
@@ -18,7 +17,7 @@ class Gaussian_Process:
     """
     def __init__(self, input_train, input_test, output_train, sigma=0.1, beta=0, theta=1, noise=False, sigma_n=None):
         self.sigma = sigma
-        self.kernel = kernels.SE()
+        self.kernel = self.SE()
         self.beta = beta
         self.theta = theta
         self.noise = noise
@@ -26,6 +25,9 @@ class Gaussian_Process:
         self.input_train = input_train
         self.input_test = input_test
         self.output_train = output_train
+
+
+
 
     def emulate(self):
         """
@@ -86,7 +88,10 @@ class Gaussian_Process:
         result = minimize(neg_log_marginal_likelihood, x0 = 1)
         self.theta = result.x
 
-    def SE():
+
+
+
+    def SE(self):
         """Create a squared exponential kernel
 
         Returns:
