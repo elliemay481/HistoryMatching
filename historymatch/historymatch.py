@@ -1,6 +1,7 @@
 # external imports
 import numpy as np
 import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans
 
 # internal imports
 import emulators
@@ -76,12 +77,12 @@ class HistoryMatch:
         if ntraining:
             self.ntraining = ntraining
         else:
-            self.ntraining = 20*ndim
+            self.ntraining = 20
 
         if nsamples:
             self.nsamples = nsamples
         else:
-            self.nsamples = 5000*ndim
+            self.nsamples = 5000
 
         self.shape = volume_shape
 
@@ -134,12 +135,10 @@ class HistoryMatch:
             elif self.emulator_choice == 'EC':
                 print('EC not yet developed')
 
-            
             GP.optimize()
             mu, cov, sd = GP.emulate()
 
             
-
             for i in range(len(theta_test)):
                 implausibilities_all[i, output] = self.implausibility(mu[i], self.Z[output], sd[i], self.var_method, self.var_obs)
         
@@ -206,9 +205,58 @@ class HistoryMatch:
             if self.shape == 'hypercube':
                 theta_train, theta_test = sample.hypercube_sample(self.ndim, self.nsamples, self.ntraining, self.bounds)
             elif self.shape == 'ellipsoid':
-                theta_train, theta_test = sample.ellipsoid_sample(self.ndim, nonimplausible_region[:,:-1], self.nsamples, self.ntraining)
-            
-            print(nonimplausible_bounds)
+                
+                # identify clusters
+                '''theta_train = []
+                theta_test = []
+
+                Kmean = KMeans(n_clusters=2)
+                Kmean.fit(nonimplausible_region[:,:-1])
+                clusterlabels = Kmean.labels_
+                clusters = []
+                for i in range(Kmean.cluster_centers_.shape[0]):
+                    cluster = nonimplausible_region[:,:-1][np.where(clusterlabels == i)]
+                    clusters.append(cluster)
+
+                    # find mean and covariance of samples
+                    K0 = np.cov(cluster[:,:-1].T)
+                    mean = np.mean(cluster[:,:-1], axis=0)
+
+                    # find ratio of nsamples
+                    npoints = (cluster.shape[0] / nonimplausible_region[:,:-1].shape[0]) * self.nsamples
+
+
+                    theta_train_i, theta_test_i = sample.ellipsoid_sample(self.ndim, npoints, self.ntraining, mean, K0)
+                    theta_train.append(theta_train_i)
+                    theta_test.append(theta_test_i)'''
+
+
+                # find mean and covariance of samples
+                K0 = np.cov(nonimplausible_region[:,:-1].T)
+                mean = np.mean(nonimplausible_region[:,:-1], axis=0)
+                theta_train, theta_test = sample.ellipsoid_sample(self.ndim, self.nsamples, self.ntraining, mean, K0)
+
+                # discard sample points outside of boundaries
+                # **** FIX BOUNDARIES HERE ********
+                theta_test_reduced = np.delete(theta_test, np.where(np.abs(theta_test) > 1), axis=0)
+                theta_train_reduced = np.delete(theta_train, np.where(np.abs(theta_train) > 1), axis=0)
+
+
+                while len(theta_test_reduced) < self.nsamples:
+                    N_te = self.nsamples - len(theta_test_reduced)
+                    theta_train_new, theta_test_new = sample.ellipsoid_sample(self.ndim, N_te, 0, mean, K0)
+                    theta_test_new = np.delete(theta_test_new, np.where(np.abs(theta_test_new) > 1), axis=0)
+                    theta_test_reduced = np.concatenate((theta_test_reduced, theta_test_new), axis=0)
+
+                while len(theta_train_reduced) < self.ntraining:
+                    N_tr = self.ntraining - len(theta_train_reduced)
+                    theta_train_new, theta_test_new = sample.ellipsoid_sample(self.ndim, 0, N_tr, mean, K0)
+                    theta_train_new = np.delete(theta_train_new, np.where(np.abs(theta_train_new) > 1), axis=0)
+                    theta_train_reduced = np.concatenate((theta_train_reduced, theta_train_new), axis=0)
+
+                theta_test = theta_test_reduced
+                theta_train = theta_train_reduced
+
             bounds_list.append(nonimplausible_bounds)
             nonimp_region_list.append(nonimplausible_region)
             sample_list.append(samples)

@@ -48,15 +48,15 @@ def hypercube_sample(ndim, Nsamples, Ntraining, limits):
     return input_train, input_test
 
 
-def ellipsoid_sample(ndim, data, Nsamples, Ntraining):
+def ellipsoid_sample(ndim, Nsamples, Ntraining, mean, covariance):
 
     '''
     Args:
     ndim : Number of dimensions
-    nonimplausible_region : Nonimplausible sample points remaining at end
-        of previous wave. Each column represents a parameter.
     Nsamples : Number of points along parameter space axes
     Ntraining : Number of training points
+    mean : ndim length array of mean parameter values
+    covariance : (ndim x ndim) array
     
     Returns:
         (Ntraining x ndim) array of training points
@@ -72,14 +72,9 @@ def ellipsoid_sample(ndim, data, Nsamples, Ntraining):
         u_train[:,i] = norm(loc=0, scale=1).ppf(u_train[:,i])
         u_test[:,i] = norm(loc=0, scale=1).ppf(u_test[:,i])
 
-
-    # find mean and covariance of samples
-    K0 = np.cov(data.T)
-    mean = np.mean(data, axis=0)
-
-    # Add pertubation
-    epsilon = 0.00001
-    K = K0 + epsilon*np.identity(ndim)
+    # Add pertubation to covariance
+    epsilon = 0.0001
+    K = covariance + epsilon*np.identity(ndim)
 
     # Calculate the Cholesky decomposition
     L = np.linalg.cholesky(K)

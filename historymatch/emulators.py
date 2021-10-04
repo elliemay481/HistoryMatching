@@ -21,7 +21,7 @@ class Gaussian_Process:
         self.beta = beta
         self.theta = theta
         self.noise = noise
-        self.sigma_n = sigma_n
+        self.sigma_n = 0.01
         self.input_train = input_train
         self.input_test = input_test
         self.output_train = output_train
@@ -34,11 +34,11 @@ class Gaussian_Process:
             
         """
 
-        
         if self.noise == True:
             K_XX = self.kernel(self.input_train, self.input_train, self.sigma, self.theta) + (self.sigma_n**2)*np.eye(len(self.input_train))
         else:
             K_XX = self.kernel(self.input_train, self.input_train, self.sigma, self.theta)
+
         K_XsX = self.kernel(self.input_test, self.input_train, self.sigma, self.theta)
         K_XXs = self.kernel(self.input_train, self.input_test, self.sigma, self.theta)
         K_XsXs = self.kernel(self.input_test, self.input_test, self.sigma, self.theta)
