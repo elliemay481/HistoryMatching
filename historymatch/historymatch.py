@@ -122,11 +122,12 @@ class HistoryMatch:
         return np.sqrt( ( E - z_i )**2  /  ( var_em + var_method + var_obs ) )
 
 
-    def wave(self, bounds, theta_train, theta_test):
+    def wave(self, bounds, theta_train, theta_test, n_active_params):
 
         implausibilities_all = np.zeros((self.nsamples, self.noutputs))
 
         for output in range(self.noutputs):
+        #for output in range(n_active_params):
 
             Ztrain = self.model[output](*theta_train.T)
 
@@ -135,8 +136,12 @@ class HistoryMatch:
             elif self.emulator_choice == 'EC':
                 print('EC not yet developed')
 
-            GP.optimize()
-            mu, cov, sd = GP.emulate()
+            #GP.optimize()
+            #mu, cov, sd = GP.emulate()
+
+            mu = self.model[output](*theta_test.T)
+
+            sd = np.ones_like(mu) * 0.01
 
             
             for i in range(len(theta_test)):
@@ -193,17 +198,24 @@ class HistoryMatch:
 
         nonimplausible_bounds = self.bounds
 
+        n_active_params = 16
+
         for wave in range(self.nwaves):
             print('Running wave ' + str(wave+1))
 
             test_list.append(theta_test)
                 
             # run history matching wave
-            nonimplausible_bounds, nonimplausible_region, samples = self.wave(nonimplausible_bounds, theta_train, theta_test)
+            nonimplausible_bounds, nonimplausible_region, samples = self.wave(nonimplausible_bounds, theta_train, theta_test, n_active_params)
+
+
+            n_active_params =+ 2
+            
             
             # generate well space samples in parameter space
             if self.shape == 'hypercube':
-                theta_train, theta_test = sample.hypercube_sample(self.ndim, self.nsamples, self.ntraining, self.bounds)
+                theta_train, theta_test = sample.hypercube_sample(self.ndim, self.nsamples, self.ntraining, nonimplausible_bounds)
+
             elif self.shape == 'ellipsoid':
                 
                 # identify clusters
