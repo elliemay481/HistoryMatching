@@ -41,6 +41,7 @@ def hypercube_sample(ndim, Nsamples, Ntraining, limits):
         (Nsamples x ndim) array of well spaced samples in parameter space
     
     '''
+
     # generate sample points on Latin Hypercube
     input_test = LHsampling(ndim, Nsamples, limits)
     input_train = LHsampling(ndim, Ntraining, limits)

@@ -1,7 +1,6 @@
 # external imports
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.cluster import KMeans
 
 # internal imports
 import emulators
@@ -36,9 +35,11 @@ class HistoryMatch:
     ndim : int
         Number of unknown parameters.
     
-    model : list of functions
-        List of functions representing the true model of the system.
-        The input of the functions are the ndim unknown parameters.
+    simulator : function
+
+        Simulator that generates outputs given an input of parameter values.
+        Output should be an array of the same size as obs_data. Must be defined
+        with the Simulator class.
 
     emulator : {'GP', 'EC'}
         Type of emulator used to emulate the model. Choices are Gaussian process
@@ -46,9 +47,6 @@ class HistoryMatch:
 
     volume_shape : {'hypercube', 'ellipsoid'}
         Determines the final shape of the nonimplausible parameter volume.
-
-    bounds : array of floats
-        (ndim x 2) array containing the upper and lower bounds for each parameter.
     
     nwaves : int, optional
         Number of history matching waves to complete. If None (default is None)
@@ -61,17 +59,12 @@ class HistoryMatch:
 
     """
     
-    def __init__(self, obs_data, ndim, model, emulator, volume_shape, bounds,
-                    var_obs, var_method, ntraining=None, nsamples=None):
+    def __init__(self, obs_data, ndim, emulator='GP', volume_shape='hypercube', ntraining=None, nsamples=None):
 
-        self.Z = obs_data
         self.ndim = ndim
-        self.bounds = bounds
-        self.model = model
-        self.noutputs = len(obs_data)
-        self.var_obs = var_obs
-        self.var_method = var_method
 
+        self.simulator = None
+        
         self.emulator_choice = emulator
 
         if ntraining:
@@ -85,6 +78,52 @@ class HistoryMatch:
             self.nsamples = 5000
 
         self.shape = volume_shape
+
+    
+    def save_model(self, output_filename):
+        None
+
+    def initialize_volume(self, min, max):
+
+        '''
+        Args
+        ---
+        min : ndarray, shape (ndim,)
+        Array of the minimum parameter values to consider.
+
+        max : ndarray, shape (ndim,)
+        Array of the maximum parameter values to consider.
+        
+        '''
+
+        self.nonimplausible_volume = self.hypercube(min, max)
+
+    def set_observations(self, obs_data, sigma_obs=0, sigma_method=0,
+                            sigma_model=0, sigma_other = 0):
+        sigmas = [sigma_obs, sigma_method, sigma_model, sigma_other]
+        assert not all(s == 0 for s in sigmas), "At least one standard deviation must be nonzero."
+        self.Z = obs_data
+        self.var_obs = sigma_obs**2
+        self.var_method = sigma_method**2
+        self.var_model = sigma_model**2
+        self.var_other = sigma_other**2
+        self.noutputs = len(obs_data)
+
+
+    def hypercube(self, min, max):
+        return np.vstack((np.array(min), np.array(max))).T
+
+    def ellipsoid(min,max):
+        None
+
+
+
+    def simulate(self, theta):
+        if self.simulator is None:
+            raise NotImplementedError("Simulator not defined")
+        else:
+            return self.simulator(theta)
+            # **** check output here ******
 
     def implausibility(self, E, z_i, var_em, var_method, var_obs):
 
@@ -106,6 +145,9 @@ class HistoryMatch:
         var_method : float
             Variance of method uncertainty
 
+        var_model : float
+            Variance of model uncertainty
+
         var_obs : float
             Variance of observational uncertainty
 
@@ -113,35 +155,39 @@ class HistoryMatch:
 
         """
         
-        # E - emulator expectation
-        # z - observational data
-        # var_em - emulator_uncertainty
-        # var_md - model discrepency error
-        # var_obs - observational error
     
         return np.sqrt( ( E - z_i )**2  /  ( var_em + var_method + var_obs ) )
 
 
-    def wave(self, bounds, theta_train, theta_test, n_active_params):
+    def wave(self, nonimplausible_volume, theta_train, theta_test, n_active_params):
 
         implausibilities_all = np.zeros((self.nsamples, self.noutputs))
+
+        # run simulator for training points
+        Ztrain = self.simulator(*theta_train.T)
+
+        Ztest = self.simulator(*theta_test.T)
+
+
 
         for output in range(self.noutputs):
         #for output in range(n_active_params):
 
-            Ztrain = self.model[output](*theta_train.T)
+            Ztrain_i = Ztrain[output]
 
             if self.emulator_choice == 'GP':
-                GP = emulators.Gaussian_Process(theta_train, theta_test, Ztrain)
+                GP = emulators.Gaussian_Process(theta_train, theta_test, Ztrain_i)
             elif self.emulator_choice == 'EC':
                 print('EC not yet developed')
 
+            print('Optimising...')
+            mu0, cov0, sd0 = GP.emulate()
             #GP.optimize()
-            #mu, cov, sd = GP.emulate()
+            mu, cov, sd = GP.emulate()
 
-            mu = self.model[output](*theta_test.T)
-
-            sd = np.ones_like(mu) * 0.01
+            #mu = Ztest[output]
+            #print('true: ' + str(Ztest[output]))
+            #sd = np.ones_like(mu) * 0.01
 
             
             for i in range(len(theta_test)):
@@ -156,12 +202,12 @@ class HistoryMatch:
         nonimplausible = np.delete(samples, np.where(samples[:,-1] > 3), axis=0)
 
         if self.shape == 'hypercube':
-            nonimplausible_bounds = utils.locate_boundaries(nonimplausible, self.ndim)
+           self.nonimplausible_volume = utils.locate_boundaries(nonimplausible, self.ndim)
         else:
             # ****** fix **********
-            nonimplausible_bounds = utils.locate_boundaries(nonimplausible, self.ndim)
+            self.nonimplausible_volume = utils.locate_boundaries(nonimplausible, self.ndim)
 
-        return nonimplausible_bounds, nonimplausible, samples
+        return self.nonimplausible_volume, nonimplausible, samples
 
 
 
@@ -177,6 +223,9 @@ class HistoryMatch:
 
         """
 
+        if self.simulator is None:
+            raise NotImplementedError("Observational data not initialised")
+
         if nwaves:
             self.nwaves = nwaves
         else:
@@ -185,18 +234,15 @@ class HistoryMatch:
         # run number of waves. in each wave:
 
         # initialise training set and parameter space
-        theta_train, theta_test = sample.hypercube_sample(self.ndim, self.nsamples, self.ntraining, self.bounds)
-        nonimplausible_bounds = self.bounds
+        theta_train, theta_test = sample.hypercube_sample(self.ndim, self.nsamples, self.ntraining, self.nonimplausible_volume)
 
         # calculate initial parameter volume
-        initial_volume = utils.hypercube_volume(self.ndim, self.bounds)
+        initial_volume = utils.hypercube_volume(self.ndim, self.nonimplausible_volume)
         
-        bounds_list = []
+        nonimp_volumes = []
         nonimp_region_list = []
         sample_list = []
         test_list = []
-
-        nonimplausible_bounds = self.bounds
 
         n_active_params = 16
 
@@ -206,7 +252,7 @@ class HistoryMatch:
             test_list.append(theta_test)
                 
             # run history matching wave
-            nonimplausible_bounds, nonimplausible_region, samples = self.wave(nonimplausible_bounds, theta_train, theta_test, n_active_params)
+            self.nonimplausible_volume, nonimplausible_region, samples = self.wave(self.nonimplausible_volume, theta_train, theta_test, n_active_params)
 
 
             n_active_params =+ 2
@@ -214,35 +260,10 @@ class HistoryMatch:
             
             # generate well space samples in parameter space
             if self.shape == 'hypercube':
-                theta_train, theta_test = sample.hypercube_sample(self.ndim, self.nsamples, self.ntraining, nonimplausible_bounds)
+                theta_train, theta_test = sample.hypercube_sample(self.ndim, self.nsamples, self.ntraining, self.nonimplausible_volume)
 
             elif self.shape == 'ellipsoid':
                 
-                # identify clusters
-                '''theta_train = []
-                theta_test = []
-
-                Kmean = KMeans(n_clusters=2)
-                Kmean.fit(nonimplausible_region[:,:-1])
-                clusterlabels = Kmean.labels_
-                clusters = []
-                for i in range(Kmean.cluster_centers_.shape[0]):
-                    cluster = nonimplausible_region[:,:-1][np.where(clusterlabels == i)]
-                    clusters.append(cluster)
-
-                    # find mean and covariance of samples
-                    K0 = np.cov(cluster[:,:-1].T)
-                    mean = np.mean(cluster[:,:-1], axis=0)
-
-                    # find ratio of nsamples
-                    npoints = (cluster.shape[0] / nonimplausible_region[:,:-1].shape[0]) * self.nsamples
-
-
-                    theta_train_i, theta_test_i = sample.ellipsoid_sample(self.ndim, npoints, self.ntraining, mean, K0)
-                    theta_train.append(theta_train_i)
-                    theta_test.append(theta_test_i)'''
-
-
                 # find mean and covariance of samples
                 K0 = np.cov(nonimplausible_region[:,:-1].T)
                 mean = np.mean(nonimplausible_region[:,:-1], axis=0)
@@ -250,6 +271,7 @@ class HistoryMatch:
 
                 # discard sample points outside of boundaries
                 # **** FIX BOUNDARIES HERE ********
+                
                 theta_test_reduced = np.delete(theta_test, np.where(np.abs(theta_test) > 1), axis=0)
                 theta_train_reduced = np.delete(theta_train, np.where(np.abs(theta_train) > 1), axis=0)
 
@@ -269,16 +291,24 @@ class HistoryMatch:
                 theta_test = theta_test_reduced
                 theta_train = theta_train_reduced
 
-            bounds_list.append(nonimplausible_bounds)
+            nonimp_volumes.append(self.nonimplausible_volume)
             nonimp_region_list.append(nonimplausible_region)
             sample_list.append(samples)
 
-            nonimplausible_volume = utils.hypercube_volume(self.ndim, nonimplausible_bounds)
-            print('Relative nonimplausible volume remaining: ' + str(round(nonimplausible_volume/initial_volume,3)))
+            cube_volume = utils.hypercube_volume(self.ndim, self.nonimplausible_volume)
+            print('Relative nonimplausible volume remaining: ' + str(round(cube_volume/initial_volume,3)))
 
-        return Results({'bounds': bounds_list, 'regions': nonimp_region_list, 'samples': sample_list, 'test_pts': test_list})
+        return Results({'nonimp_volumes': nonimp_volumes, 'regions': nonimp_region_list, 'samples': sample_list, 'test_pts': test_list})
 
-            
+
+
+
+class Simulator(HistoryMatch): 
+    def __init__(self, hm_instance):
+        self.hm_instance = hm_instance
+
+    def set_simulator(self, model):
+        self.hm_instance.simulator = model
 
             
 

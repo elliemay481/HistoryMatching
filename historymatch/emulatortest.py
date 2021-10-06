@@ -2,7 +2,6 @@ import numpy as np
 from scipy.optimize import minimize
 from scipy.linalg import solve_triangular
 from scipy.optimize import basinhopping
-from math import factorial
 
 class Gaussian_Process:
     """
@@ -28,37 +27,7 @@ class Gaussian_Process:
         self.input_train = input_train
         self.input_test = input_test
         self.output_train = output_train
-        self.ndim = self.input_train.shape[1]
 
-
-
-
-    def linear_regression(self):
-
-        def design_matrix(x, order=2):
-            N = self.ndim*(order) + 1
-            ncombinations = factorial(self.ndim) / (2*factorial(self.ndim-2))
-            X_d = np.zeros((len(x),N+self.ndim))
-            X_d[:,0] = 1
-            for i in range(order):
-                for j in range(self.ndim):
-                    X_d[:,1 + (i*self.ndim + j)] = x[:,j]**(i+1)
-            prod = 0
-            for i in range(self.ndim):
-                for j in range(self.ndim):
-                    if i < j:
-                        X_d[:,N + prod] = x[:,i]*x[:,j]
-                        prod += 1
-            return X_d
-
-        X = design_matrix(self.input_train)
-        X_test = design_matrix(self.input_test)
-
-        def solve(A, y):
-            coeff = ((np.linalg.inv(X.T.dot(X))).dot(X.T)).dot(y)
-            return coeff.flatten()
-
-        return X_test, solve(X,self.output_train)
 
 
 
@@ -66,10 +35,6 @@ class Gaussian_Process:
         """
             
         """
-
-        # perform linear regression
-        X_d, coeff = self.linear_regression()
-        mu_ols = np.dot(X_d, coeff)
 
         if self.noise == True:
             K_XX = self.kernel(self.input_train, self.input_train, self.sigma_f, self.l) + (self.sigma_n**2)*np.eye(len(self.input_train))
@@ -90,12 +55,11 @@ class Gaussian_Process:
         self.K_XsXs = K_XsXs
         self.K_XX_inv = K_XX_inv
 
-        mu = mu_ols + self.K_XsX.dot(self.K_XX_inv).dot(self.output_train - self.beta)
-        cov = self.sigma_f**2 - self.K_XsXs - self.K_XsX.dot(self.K_XX_inv).dot(self.K_XXs)
+        mu = self.beta + self.K_XsX.dot(self.K_XX_inv).dot(self.output_train - self.beta)
+        cov = self.K_XsXs - self.K_XsX.dot(self.K_XX_inv).dot(self.K_XXs)
         
         sd = np.sqrt(np.abs(np.diag(cov)))
         return mu, cov, sd
-        
 
 
 

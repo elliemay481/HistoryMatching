@@ -24,7 +24,6 @@ def locate_boundaries(data, ndim):
         Returns: (ndim x 2) array of minimum and maximum values for each parameter.
         
         '''
-    
         def find_minmax(data, i):
             return np.array([data[:,i].min(), data[:,i].max()]).reshape(1,-1)
 
