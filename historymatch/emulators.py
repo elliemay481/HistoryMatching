@@ -18,7 +18,7 @@ class Gaussian_Process:
         sigma_n (float) : standard devation of gaussian noise
 
     """
-    def __init__(self, input_train, input_test, output_train, sigma_f=0.01, beta=0, l=0.5, noise=False, sigma_n=None):
+    def __init__(self, input_train, input_test, output_train, sigma_f=0.1, beta=0, l=0.5, noise=False, sigma_n=None):
         self.sigma_f = sigma_f
         self.kernel = self.SE()
         self.beta = beta
@@ -34,7 +34,7 @@ class Gaussian_Process:
 
 
     def linear_regression(self):
-
+        '''
         def design_matrix(x, order=2):
             N = self.ndim*(order) + 1
             ncombinations = factorial(self.ndim) / (2*factorial(self.ndim-2))
@@ -49,6 +49,15 @@ class Gaussian_Process:
                     if i < j:
                         X_d[:,N + prod] = x[:,i]*x[:,j]
                         prod += 1
+            return X_d'''
+
+        def design_matrix(x, order=1):
+            N = self.ndim*(order) + 1
+            X_d = np.zeros((len(x),N))
+            X_d[:,0] = 1
+            for i in range(order):
+                for j in range(self.ndim):
+                    X_d[:,1 + j] = x[:,j]**(i+1)
             return X_d
 
         X = design_matrix(self.input_train)
@@ -58,7 +67,15 @@ class Gaussian_Process:
             coeff = ((np.linalg.inv(X.T.dot(X))).dot(X.T)).dot(y)
             return coeff.flatten()
 
-        return X_test, solve(X,self.output_train)
+        coeff = solve(X,self.output_train)
+       
+        mu_train = np.dot(X, coeff)
+
+        mu_test = np.dot(X_test, coeff)
+        #print((self.output_train - mu_train))
+        var = np.dot((self.output_train - mu_train).T, (self.output_train - mu_train)) / len(mu_train)
+
+        return mu_test, mu_train, var
 
 
 
@@ -68,8 +85,9 @@ class Gaussian_Process:
         """
 
         # perform linear regression
-        X_d, coeff = self.linear_regression()
-        mu_ols = np.dot(X_d, coeff)
+        mu_ols, mu_train, var_ols = self.linear_regression()
+        
+
 
         if self.noise == True:
             K_XX = self.kernel(self.input_train, self.input_train, self.sigma_f, self.l) + (self.sigma_n**2)*np.eye(len(self.input_train))
@@ -90,10 +108,19 @@ class Gaussian_Process:
         self.K_XsXs = K_XsXs
         self.K_XX_inv = K_XX_inv
 
-        mu = mu_ols + self.K_XsX.dot(self.K_XX_inv).dot(self.output_train - self.beta)
-        cov = self.sigma_f**2 - self.K_XsXs - self.K_XsX.dot(self.K_XX_inv).dot(self.K_XXs)
         
-        sd = np.sqrt(np.abs(np.diag(cov)))
+        #print(mu_ols)
+        #print(self.K_XsX.dot(self.K_XX_inv).dot(self.output_train - self.beta))
+        mu = mu_ols + self.K_XsX.dot(self.K_XX_inv).dot(self.output_train - mu_train)
+        #mu = mu_ols
+        cov = self.K_XsX.dot(self.K_XX_inv).dot(self.K_XXs)
+
+        variance = var_ols + self.sigma_f**2 - np.abs(np.diag(cov))
+        print(variance)
+        #print(self.sigma_f**2)
+        #print(np.abs(np.diag(cov)))
+        
+        sd = np.sqrt(variance)
         return mu, cov, sd
         
 
@@ -159,11 +186,10 @@ class Gaussian_Process:
             #print(s_init)
 
             result = minimize(neg_log_marginal_likelihood, x0 = [l_init, s_init], bounds=bounds, method='L-BFGS-B')
-            print(result.x)
         minimizer_kwargs = {"method": "L-BFGS-B", "bounds":bounds}
 
         #result = basinhopping(neg_log_marginal_likelihood, x0=[1e-3], minimizer_kwargs=minimizer_kwargs, niter=200)
-        print(result.x)
+        #print(result.x)
         self.l, self.sigma_f = result.x
         #self.l = result.x
         

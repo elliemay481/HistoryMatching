@@ -70,7 +70,7 @@ class HistoryMatch:
         if ntraining:
             self.ntraining = ntraining
         else:
-            self.ntraining = 20
+            self.ntraining = 7
 
         if nsamples:
             self.nsamples = nsamples
@@ -186,12 +186,13 @@ class HistoryMatch:
             mu, cov, sd = GP.emulate()
 
             #mu = Ztest[output]
+            #print('pred: ' + str(mu))
             #print('true: ' + str(Ztest[output]))
             #sd = np.ones_like(mu) * 0.01
 
             
             for i in range(len(theta_test)):
-                implausibilities_all[i, output] = self.implausibility(mu[i], self.Z[output], sd[i], self.var_method, self.var_obs)
+                implausibilities_all[i, output] = self.implausibility(mu[i], self.Z[output], sd[i]**2, self.var_method, self.var_obs)
         
     
         # get index of second highest maximum implaus for all outputs
