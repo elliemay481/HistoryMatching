@@ -293,7 +293,11 @@ def plotcorner(samples, parameter_bounds, ndim, bins=20, Fig=None, colorbar=Fals
             parameters = [i,j]
             if i == j:
                 ax.axes.yaxis.set_visible(False)
-                opticaldepth_1D(samples, parameter_bounds[i], parameter=i, bins=bins, Fig=(fig,ax), label=labels[i])
+                if labels != None:
+                    label=labels[i]
+                else:
+                    label=None
+                opticaldepth_1D(samples, parameter_bounds[i], parameter=i, bins=bins, Fig=(fig,ax), label=label)
             elif i < j:
                 plot_implausibility2D(samples, parameter_bounds[[i,j]], [i,j], bins, (fig,ax), colorbar=colorbar, labels=labels, plot_kwargs=plot1D_kwargs)
             else:

@@ -16,6 +16,7 @@ def LHsampling(ndim, Ntraining, limits):
     
     # generate sample points
     input_train = lhs(ndim, samples=Ntraining, criterion='center')
+    print(limits.shape)
     
     # adjust sample points for parameter ranges
     for i in range(ndim):
@@ -72,10 +73,12 @@ def ellipsoid_sample(ndim, Nsamples, Ntraining, mean, covariance):
     for i in range(ndim):
         u_train[:,i] = norm(loc=0, scale=1).ppf(u_train[:,i])
         u_test[:,i] = norm(loc=0, scale=1).ppf(u_test[:,i])
-
+    
     # Add pertubation to covariance
-    epsilon = 0.0001
+    epsilon = 0.001
     K = covariance + epsilon*np.identity(ndim)
+
+    
 
     # Calculate the Cholesky decomposition
     L = np.linalg.cholesky(K)

@@ -17,7 +17,7 @@ class Results(dict):
         """ Returns attribute of history matching results."""
         attr = self[name]
         if not attr:
-           raise AttributeError(f'{self.__class__.__name__}.{name} does not exist.')
+            raise AttributeError(f'{self.__class__.__name__}.{name} does not exist.')
         return attr
 
 
@@ -70,7 +70,7 @@ class HistoryMatch:
         if ntraining:
             self.ntraining = ntraining
         else:
-            self.ntraining = 7
+            self.ntraining = 20
 
         if nsamples:
             self.nsamples = nsamples
@@ -103,6 +103,7 @@ class HistoryMatch:
         sigmas = [sigma_obs, sigma_method, sigma_model, sigma_other]
         assert not all(s == 0 for s in sigmas), "At least one standard deviation must be nonzero."
         self.Z = obs_data
+        self.sigma_obs = sigma_obs
         self.var_obs = sigma_obs**2
         self.var_method = sigma_method**2
         self.var_model = sigma_model**2
@@ -174,21 +175,29 @@ class HistoryMatch:
         #for output in range(n_active_params):
 
             Ztrain_i = Ztrain[output]
+            #print(Ztrain_i)
 
             if self.emulator_choice == 'GP':
-                GP = emulators.Gaussian_Process(theta_train, theta_test, Ztrain_i)
+                GP = emulators.GaussianProcess(theta_train, Ztrain_i, length_scale=1, signal_sd=0.25, ols_order=1, bayes_linear = False)
+                GP.train()
             elif self.emulator_choice == 'EC':
                 print('EC not yet developed')
 
-            print('Optimising...')
-            mu0, cov0, sd0 = GP.emulate()
+            print('Emulating...')
+            #mu0, cov0, sd0 = GP.emulate(theta_test)
             #GP.optimize()
-            mu, cov, sd = GP.emulate()
+            mu, sd = GP.emulate(theta_test)
+
 
             #mu = Ztest[output]
             #print('pred: ' + str(mu))
             #print('true: ' + str(Ztest[output]))
             #sd = np.ones_like(mu) * 0.01
+            print(np.mean(sd))
+            print(self.sigma_obs)
+
+            if np.mean(sd) < np.sqrt(self.var_obs):
+                print('Mean emulator s.d lower than obs')
 
             
             for i in range(len(theta_test)):
@@ -203,7 +212,7 @@ class HistoryMatch:
         nonimplausible = np.delete(samples, np.where(samples[:,-1] > 3), axis=0)
 
         if self.shape == 'hypercube':
-           self.nonimplausible_volume = utils.locate_boundaries(nonimplausible, self.ndim)
+            self.nonimplausible_volume = utils.locate_boundaries(nonimplausible, self.ndim)
         else:
             # ****** fix **********
             self.nonimplausible_volume = utils.locate_boundaries(nonimplausible, self.ndim)
@@ -267,6 +276,7 @@ class HistoryMatch:
                 
                 # find mean and covariance of samples
                 K0 = np.cov(nonimplausible_region[:,:-1].T)
+                print(nonimplausible_region[:,:-1])
                 mean = np.mean(nonimplausible_region[:,:-1], axis=0)
                 theta_train, theta_test = sample.ellipsoid_sample(self.ndim, self.nsamples, self.ntraining, mean, K0)
 
@@ -275,18 +285,18 @@ class HistoryMatch:
                 
                 theta_test_reduced = np.delete(theta_test, np.where(np.abs(theta_test) > 1), axis=0)
                 theta_train_reduced = np.delete(theta_train, np.where(np.abs(theta_train) > 1), axis=0)
-
+            
 
                 while len(theta_test_reduced) < self.nsamples:
                     N_te = self.nsamples - len(theta_test_reduced)
                     theta_train_new, theta_test_new = sample.ellipsoid_sample(self.ndim, N_te, 0, mean, K0)
-                    theta_test_new = np.delete(theta_test_new, np.where(np.abs(theta_test_new) > 1), axis=0)
+                    theta_test_new = np.delete(theta_test_new, np.where(np.abs(theta_test_new) > 1)[0], axis=0)
                     theta_test_reduced = np.concatenate((theta_test_reduced, theta_test_new), axis=0)
 
                 while len(theta_train_reduced) < self.ntraining:
                     N_tr = self.ntraining - len(theta_train_reduced)
                     theta_train_new, theta_test_new = sample.ellipsoid_sample(self.ndim, 0, N_tr, mean, K0)
-                    theta_train_new = np.delete(theta_train_new, np.where(np.abs(theta_train_new) > 1), axis=0)
+                    theta_train_new = np.delete(theta_train_new, np.where(np.abs(theta_train_new) > 1)[0], axis=0)
                     theta_train_reduced = np.concatenate((theta_train_reduced, theta_train_new), axis=0)
 
                 theta_test = theta_test_reduced
