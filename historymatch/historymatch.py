@@ -179,7 +179,6 @@ class HistoryMatch:
 
             if self.emulator_choice == 'GP':
                 GP = emulators.GaussianProcess(theta_train, Ztrain_i, length_scale=1, signal_sd=0.25, ols_order=1, bayes_linear = False)
-                GP.train()
             elif self.emulator_choice == 'EC':
                 print('EC not yet developed')
 
@@ -193,8 +192,8 @@ class HistoryMatch:
             #print('pred: ' + str(mu))
             #print('true: ' + str(Ztest[output]))
             #sd = np.ones_like(mu) * 0.01
-            print(np.mean(sd))
-            print(self.sigma_obs)
+            #print(np.mean(sd))
+            #print(self.sigma_obs)
 
             if np.mean(sd) < np.sqrt(self.var_obs):
                 print('Mean emulator s.d lower than obs')
@@ -276,7 +275,7 @@ class HistoryMatch:
                 
                 # find mean and covariance of samples
                 K0 = np.cov(nonimplausible_region[:,:-1].T)
-                print(nonimplausible_region[:,:-1])
+
                 mean = np.mean(nonimplausible_region[:,:-1], axis=0)
                 theta_train, theta_test = sample.ellipsoid_sample(self.ndim, self.nsamples, self.ntraining, mean, K0)
 
@@ -301,6 +300,24 @@ class HistoryMatch:
 
                 theta_test = theta_test_reduced
                 theta_train = theta_train_reduced
+
+                def Mahalanobis(sample, mean, covariance):
+                    M = np.sqrt((sample - mean).T.dot(np.linalg.inv(covariance).dot((sample - mean))))
+                    return M
+                '''
+                delete_pt = 0
+                test_mean = np.mean(theta_test, axis=0)
+                test_cov = np.cov(theta_test.T)
+                for i in range(len(theta_test)):
+                    M = Mahalanobis(theta_test[i], test_mean, test_cov)
+                    if M > 3:
+                        np.delete(theta_test, i)
+                        delete_pt += 1
+
+            print(delete_pt)
+            
+            
+            '''
 
             nonimp_volumes.append(self.nonimplausible_volume)
             nonimp_region_list.append(nonimplausible_region)

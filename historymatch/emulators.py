@@ -15,7 +15,7 @@ class Emulator(ABC):
  
 class GaussianProcess(Emulator):
 
-    def __init__(self, input_train, output_train, length_scale=0.5, signal_sd=0.1, noise_sd = None, ols_order = 1, bayes_linear = True):
+    def __init__(self, input_train, output_train, length_scale=0.25, signal_sd=0.1, noise_sd = None, ols_order = 1, bayes_linear = True):
         self.sigma_f = signal_sd
         self.sigma_n = noise_sd
         self.l = length_scale
@@ -26,17 +26,21 @@ class GaussianProcess(Emulator):
         self.order = ols_order
         self.bayes_linear = bayes_linear
 
-    def train(self):
-        
+
+
+    def emulate(self, param_samples):
+
         if self.bayes_linear == True:
             # perform linear regression
             coeff_ols, train_ols, var_ols = self.linear_regression()
             self.coeff_ols = coeff_ols
             self.var_ols = var_ols
             self.train_ols = train_ols
-            #self.sigma_f = np.sqrt(var_ols)
+            self.sigma_f = np.sqrt(var_ols)
 
-        # initialise Gaussian Process
+        self.input_test = param_samples
+
+
         if self.sigma_n != None:
             K_XX = self.kernel(self.input_train, self.input_train, self.sigma_f, self.l) + (self.sigma_noise**2)*np.eye(len(self.input_train))
         else:
@@ -45,13 +49,6 @@ class GaussianProcess(Emulator):
 
         self.K_XX = K_XX
         self.K_XX_inv = K_XX_inv
-        
-
-
-
-    def emulate(self, param_samples):
-
-        self.input_test = param_samples
         
         K_XsX = self.kernel(self.input_test, self.input_train, self.sigma_f, self.l)
         K_XXs = self.kernel(self.input_train, self.input_test, self.sigma_f, self.l)
@@ -141,15 +138,16 @@ class GaussianProcess(Emulator):
        
         mu_train = np.dot(X, coeff)
 
-        #print(mu_train)
         #print(self.output_train)
+        
 
         var = np.dot((self.output_train - mu_train).T, (self.output_train - mu_train)) / len(mu_train)
 
+        print(var)
         return coeff, mu_train, var
 
 
-
+    
     def design_matrix(self, x):
 
             N = self.ndim*(self.order) + 1
@@ -170,6 +168,11 @@ class GaussianProcess(Emulator):
                             X_d[:,N + prod] = x[:,i]*x[:,j]
                             prod += 1
             return X_d
+
+    #def design_matrix(self, x):
+        #X_d = np.zeros((len(x),1))
+        #X_d[:,0] = 1
+        #return X_d
 
     
  
