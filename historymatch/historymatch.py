@@ -101,7 +101,7 @@ class HistoryMatch:
     def set_observations(self, obs_data, sigma_obs=0, sigma_method=0,
                             sigma_model=0, sigma_other = 0):
         sigmas = [sigma_obs, sigma_method, sigma_model, sigma_other]
-        assert not all(s == 0 for s in sigmas), "At least one standard deviation must be nonzero."
+        #assert not all(s == 0 for s in sigmas), "At least one standard deviation must be nonzero."
         self.Z = obs_data
         self.sigma_obs = sigma_obs
         self.var_obs = sigma_obs**2
@@ -178,7 +178,7 @@ class HistoryMatch:
             #print(Ztrain_i)
 
             if self.emulator_choice == 'GP':
-                GP = emulators.GaussianProcess(theta_train, Ztrain_i, length_scale=1, signal_sd=0.25, ols_order=1, bayes_linear = False)
+                GP = emulators.GaussianProcess(theta_train, Ztrain_i, length_scale=2, signal_sd=0.1, ols_order=1, bayes_linear = True)
             elif self.emulator_choice == 'EC':
                 print('EC not yet developed')
 
@@ -187,20 +187,18 @@ class HistoryMatch:
             #GP.optimize()
             mu, sd = GP.emulate(theta_test)
 
-
             #mu = Ztest[output]
-            #print('pred: ' + str(mu))
-            #print('true: ' + str(Ztest[output]))
+
             #sd = np.ones_like(mu) * 0.01
             #print(np.mean(sd))
             #print(self.sigma_obs)
 
-            if np.mean(sd) < np.sqrt(self.var_obs):
+            if np.mean(sd) < np.sqrt(self.var_obs[output]):
                 print('Mean emulator s.d lower than obs')
 
             
             for i in range(len(theta_test)):
-                implausibilities_all[i, output] = self.implausibility(mu[i], self.Z[output], sd[i]**2, self.var_method, self.var_obs)
+                implausibilities_all[i, output] = self.implausibility(mu[i], self.Z[output], sd[i]**2, self.var_method, self.var_obs[output])
         
     
         # get index of second highest maximum implaus for all outputs
@@ -216,7 +214,7 @@ class HistoryMatch:
             # ****** fix **********
             self.nonimplausible_volume = utils.locate_boundaries(nonimplausible, self.ndim)
 
-        return self.nonimplausible_volume, nonimplausible, samples
+        return self.nonimplausible_volume, nonimplausible, samples, mu, sd, Ztrain[-1]
 
 
 
@@ -252,6 +250,10 @@ class HistoryMatch:
         nonimp_region_list = []
         sample_list = []
         test_list = []
+        train_list = []
+        em_mu = []
+        em_sd = []
+        z_train_list = []
 
         n_active_params = 16
 
@@ -259,10 +261,14 @@ class HistoryMatch:
             print('Running wave ' + str(wave+1))
 
             test_list.append(theta_test)
+            train_list.append(theta_train)
                 
             # run history matching wave
-            self.nonimplausible_volume, nonimplausible_region, samples = self.wave(self.nonimplausible_volume, theta_train, theta_test, n_active_params)
+            self.nonimplausible_volume, nonimplausible_region, samples, mu, sd, z_train = self.wave(self.nonimplausible_volume, theta_train, theta_test, n_active_params)
 
+            em_mu.append(mu)
+            em_sd.append(sd)
+            z_train_list.append(z_train)
 
             n_active_params =+ 2
             
@@ -285,7 +291,7 @@ class HistoryMatch:
                 theta_test_reduced = np.delete(theta_test, np.where(np.abs(theta_test) > 1), axis=0)
                 theta_train_reduced = np.delete(theta_train, np.where(np.abs(theta_train) > 1), axis=0)
             
-
+                '''
                 while len(theta_test_reduced) < self.nsamples:
                     N_te = self.nsamples - len(theta_test_reduced)
                     theta_train_new, theta_test_new = sample.ellipsoid_sample(self.ndim, N_te, 0, mean, K0)
@@ -303,7 +309,7 @@ class HistoryMatch:
 
                 def Mahalanobis(sample, mean, covariance):
                     M = np.sqrt((sample - mean).T.dot(np.linalg.inv(covariance).dot((sample - mean))))
-                    return M
+                    return M'''
                 '''
                 delete_pt = 0
                 test_mean = np.mean(theta_test, axis=0)
@@ -326,7 +332,7 @@ class HistoryMatch:
             cube_volume = utils.hypercube_volume(self.ndim, self.nonimplausible_volume)
             print('Relative nonimplausible volume remaining: ' + str(round(cube_volume/initial_volume,3)))
 
-        return Results({'nonimp_volumes': nonimp_volumes, 'regions': nonimp_region_list, 'samples': sample_list, 'test_pts': test_list})
+        return Results({'nonimp_volumes': nonimp_volumes, 'regions': nonimp_region_list, 'samples': sample_list, 'train_pts': train_list, 'test_pts': test_list, 'emulator_mu': em_mu, 'emulator_sd': em_sd, 'z_train': z_train_list})
 
 
 

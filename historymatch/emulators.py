@@ -1,4 +1,4 @@
- 
+
 from abc import ABC, abstractmethod
 import numpy as np
 from math import factorial
@@ -6,16 +6,16 @@ from math import factorial
 #from scipy.linalg import solve_triangular
 #from scipy.optimize import basinhopping
 
- 
+
 class Emulator(ABC):
- 
+
     @abstractmethod
     def emulate(self, param_samples):
         pass
- 
+
 class GaussianProcess(Emulator):
 
-    def __init__(self, input_train, output_train, length_scale=0.25, signal_sd=0.1, noise_sd = None, ols_order = 1, bayes_linear = True):
+    def __init__(self, input_train, output_train, length_scale, signal_sd=0.1, noise_sd = None, ols_order = 1, bayes_linear = True):
         self.sigma_f = signal_sd
         self.sigma_n = noise_sd
         self.l = length_scale
@@ -65,12 +65,15 @@ class GaussianProcess(Emulator):
             mu_ols = np.dot(Xd, self.coeff_ols)
 
             # emulate
-            mu = mu_ols + self.K_XsX.dot(self.K_XX_inv).dot(self.output_train - self.train_ols)
-            cov = self.K_XsX.dot(self.K_XX_inv).dot(self.K_XXs)
+            mu = mu_ols + self.K_XsX.dot(self.K_XX_inv).dot(self.output_train - np.mean(self.output_train))
+            cov = self.K_XsXs - self.K_XsX.dot(self.K_XX_inv).dot(self.K_XXs)
 
-
-            variance = self.var_ols + self.sigma_f**2 - np.abs(np.diag(cov))
+            #print(self.sigma_f)
+            #print(np.sqrt(np.var(self.output_train)))
+            variance = np.abs(np.diag(cov))
             sd = np.sqrt(variance)
+            #print(sd)
+            #self.var_ols + self.sigma_f**2 
 
         else:
             mu = self.K_XsX.dot(self.K_XX_inv).dot(self.output_train)
@@ -108,7 +111,7 @@ class GaussianProcess(Emulator):
                 x2 = x2.reshape(-1, 1)
             
             norm_sq = np.sum(x1**2, axis=1).reshape(-1, 1) + np.sum(x2**2, axis=1)  - 2 * np.dot(x1, x2.T)
-            K = sigma_f**2 * np.exp(- norm_sq / ((l**2)))
+            K = sigma_f**2 * np.exp(- norm_sq / ((2*l**2)))
             return K
         
         return squared_exponential
@@ -135,21 +138,22 @@ class GaussianProcess(Emulator):
             return coeff.flatten()
 
         coeff = solve(X,self.output_train)
-       
+
         mu_train = np.dot(X, coeff)
 
         #print(self.output_train)
+        #print(mu_train)
         
 
         var = np.dot((self.output_train - mu_train).T, (self.output_train - mu_train)) / len(mu_train)
 
-        print(var)
+        #print(np.sqrt(var))
         return coeff, mu_train, var
 
 
-    
+    '''
     def design_matrix(self, x):
-
+            
             N = self.ndim*(self.order) + 1
             if self.order > 1:
                 ncombinations = int(factorial(self.ndim) / (2*factorial(self.ndim-2)))
@@ -167,16 +171,16 @@ class GaussianProcess(Emulator):
                         if i < j:
                             X_d[:,N + prod] = x[:,i]*x[:,j]
                             prod += 1
-            return X_d
+            return X_d'''
 
-    #def design_matrix(self, x):
-        #X_d = np.zeros((len(x),1))
-        #X_d[:,0] = 1
-        #return X_d
+    def design_matrix(self, x):
+        X_d = np.zeros((len(x),1))
+        X_d[:,0] = 1
+        return X_d
 
     
- 
+
 class EigenvectorContinuation(Emulator):
- 
+
     def emulate(self):
         pass
