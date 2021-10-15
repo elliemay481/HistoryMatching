@@ -17,7 +17,7 @@ class GaussianProcess(Emulator):
 
     def __init__(self, input_train, output_train, length_scale, signal_sd=0.1, noise_sd = None, ols_order = 1, bayes_linear = True):
         self.sigma_f = signal_sd
-        self.sigma_n = noise_sd
+        self.sigma_noise = noise_sd
         self.l = length_scale
         self.input_train = input_train
         self.output_train = output_train
@@ -41,7 +41,7 @@ class GaussianProcess(Emulator):
         self.input_test = param_samples
 
 
-        if self.sigma_n != None:
+        if self.sigma_noise != None:
             K_XX = self.kernel(self.input_train, self.input_train, self.sigma_f, self.l) + (self.sigma_noise**2)*np.eye(len(self.input_train))
         else:
             K_XX = self.kernel(self.input_train, self.input_train, self.sigma_f, self.l)
@@ -72,7 +72,7 @@ class GaussianProcess(Emulator):
             #print(np.sqrt(np.var(self.output_train)))
             variance = np.abs(np.diag(cov))
             sd = np.sqrt(variance)
-            #print(sd)
+            print(sd)
             #self.var_ols + self.sigma_f**2 
 
         else:
