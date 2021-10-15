@@ -2,6 +2,8 @@
 from abc import ABC, abstractmethod
 import numpy as np
 from math import factorial
+from scipy.optimize import minimize
+from numpy.linalg import cholesky, det, inv
 #from scipy.optimize import minimize
 #from scipy.linalg import solve_triangular
 #from scipy.optimize import basinhopping
@@ -25,6 +27,7 @@ class GaussianProcess(Emulator):
         self.kernel = self.SE()
         self.order = ols_order
         self.bayes_linear = bayes_linear
+        self.w = 0.8
 
 
 
@@ -37,6 +40,7 @@ class GaussianProcess(Emulator):
             self.var_ols = var_ols
             self.train_ols = train_ols
             self.sigma_f = np.sqrt(var_ols)
+            #self.sigma_noise = np.sqrt((1-self.w)*var_ols)
 
         self.input_test = param_samples
 
@@ -63,6 +67,10 @@ class GaussianProcess(Emulator):
         if self.bayes_linear == True:
             Xd = self.design_matrix(self.input_test)
             mu_ols = np.dot(Xd, self.coeff_ols)
+
+            self.optimize()
+
+            print(self.sigma_f)
 
             # emulate
             mu = mu_ols + self.K_XsX.dot(self.K_XX_inv).dot(self.output_train - np.mean(self.output_train))
@@ -115,6 +123,27 @@ class GaussianProcess(Emulator):
             return K
         
         return squared_exponential
+
+    def squared_exponential(self, x1,x2,sigma_f,l):
+            """
+            Args:
+                x1 : (n x d) array of floats
+                x2 : (m x d) array of floats
+                sigma (float) : The standard deviation of the kernel.
+                l (float) : The length scale of the kernel.
+
+            Returns:
+                (n x m) covariance matrix
+            """
+
+            if x1.ndim == 1:
+                x1 = x1.reshape(-1, 1)
+            if x2.ndim == 1:
+                x2 = x2.reshape(-1, 1)
+            
+            norm_sq = np.sum(x1**2, axis=1).reshape(-1, 1) + np.sum(x2**2, axis=1)  - 2 * np.dot(x1, x2.T)
+            K = sigma_f**2 * np.exp(- norm_sq / ((2*l**2)))
+            return K
 
 
     def linear_regression(self):
@@ -178,7 +207,19 @@ class GaussianProcess(Emulator):
         X_d[:,0] = 1
         return X_d
 
-    
+    def nll_fn(self,l):
+            # Naive implementation of Eq. (11). Works well for the examples 
+            # in this article but is numerically less stable compared to 
+            # the implementation in nll_stable below.
+            K = self.squared_exponential(self.input_train,self.input_train,self.sigma_f,l)
+            return 0.5 * np.log(det(K)) + \
+                0.5 * self.output_train.dot(inv(K).dot(self.output_train)) + \
+                0.5 * len(self.input_train) * np.log(2*np.pi)
+
+    def optimize(self):
+        res = minimize(self.nll_fn, x0=1, bounds=[[0.00001, None]], method='L-BFGS-B')
+        self.l = res.x
+        
 
 class EigenvectorContinuation(Emulator):
 

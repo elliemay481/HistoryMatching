@@ -70,7 +70,7 @@ class HistoryMatch:
         if ntraining:
             self.ntraining = ntraining
         else:
-            self.ntraining = 20
+            self.ntraining = 10
 
         if nsamples:
             self.nsamples = nsamples
@@ -178,7 +178,7 @@ class HistoryMatch:
             #print(Ztrain_i)
 
             if self.emulator_choice == 'GP':
-                GP = emulators.GaussianProcess(theta_train, Ztrain_i, length_scale=2, signal_sd=0.1, ols_order=1, bayes_linear = True, noise_sd = 0.01)
+                GP = emulators.GaussianProcess(theta_train, Ztrain_i, length_scale=2, signal_sd=0.1, ols_order=1, bayes_linear = True, noise_sd = None)
             elif self.emulator_choice == 'EC':
                 print('EC not yet developed')
 
