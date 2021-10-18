@@ -4,9 +4,8 @@ import numpy as np
 from math import factorial
 from scipy.optimize import minimize
 from numpy.linalg import cholesky, det, inv
-#from scipy.optimize import minimize
+from scipy.linalg import solve_triangular
 #from scipy.linalg import solve_triangular
-#from scipy.optimize import basinhopping
 
 
 class Emulator(ABC):
@@ -27,11 +26,7 @@ class GaussianProcess(Emulator):
         self.kernel = self.SE()
         self.order = ols_order
         self.bayes_linear = bayes_linear
-        self.w = 0.8
-
-
-
-    def emulate(self, param_samples):
+        #self.w = 0.8
 
         if self.bayes_linear == True:
             # perform linear regression
@@ -40,15 +35,20 @@ class GaussianProcess(Emulator):
             self.var_ols = var_ols
             self.train_ols = train_ols
             self.sigma_f = np.sqrt(var_ols)
-            #self.sigma_noise = np.sqrt((1-self.w)*var_ols)
+
+
+    def emulate(self, param_samples):
+
+        
+        #self.sigma_noise = np.sqrt((1-self.w)*var_ols)
 
         self.input_test = param_samples
 
 
-        if self.sigma_noise != None:
-            K_XX = self.kernel(self.input_train, self.input_train, self.sigma_f, self.l) + (self.sigma_noise**2)*np.eye(len(self.input_train))
-        else:
-            K_XX = self.kernel(self.input_train, self.input_train, self.sigma_f, self.l)
+        #if self.sigma_noise != None:
+        K_XX = self.kernel(self.input_train, self.input_train, self.sigma_f, self.l) + (self.sigma_noise**2)*np.eye(len(self.input_train))
+        #else:
+        #K_XX = self.kernel(self.input_train, self.input_train, self.sigma_f, self.l)
         K_XX_inv = np.linalg.inv(K_XX)
 
         self.K_XX = K_XX
@@ -68,28 +68,19 @@ class GaussianProcess(Emulator):
             Xd = self.design_matrix(self.input_test)
             mu_ols = np.dot(Xd, self.coeff_ols)
 
-            self.optimize()
-
-            print(self.sigma_f)
-
             # emulate
             mu = mu_ols + self.K_XsX.dot(self.K_XX_inv).dot(self.output_train - np.mean(self.output_train))
             cov = self.K_XsXs - self.K_XsX.dot(self.K_XX_inv).dot(self.K_XXs)
 
-            #print(self.sigma_f)
-            #print(np.sqrt(np.var(self.output_train)))
+
             variance = np.abs(np.diag(cov))
             sd = np.sqrt(variance)
-            print(sd)
-            #self.var_ols + self.sigma_f**2 
 
         else:
             mu = self.K_XsX.dot(self.K_XX_inv).dot(self.output_train)
             cov = self.K_XsXs - self.K_XsX.dot(self.K_XX_inv).dot(self.K_XXs)
             sd = np.sqrt(np.abs(np.diag(cov)))
 
-
-            #print(np.sqrt(np.abs(self.K_XsX.dot(self.K_XX_inv).dot(self.K_XXs))))
         return mu, sd
 
 
@@ -123,27 +114,6 @@ class GaussianProcess(Emulator):
             return K
         
         return squared_exponential
-
-    def squared_exponential(self, x1,x2,sigma_f,l):
-            """
-            Args:
-                x1 : (n x d) array of floats
-                x2 : (m x d) array of floats
-                sigma (float) : The standard deviation of the kernel.
-                l (float) : The length scale of the kernel.
-
-            Returns:
-                (n x m) covariance matrix
-            """
-
-            if x1.ndim == 1:
-                x1 = x1.reshape(-1, 1)
-            if x2.ndim == 1:
-                x2 = x2.reshape(-1, 1)
-            
-            norm_sq = np.sum(x1**2, axis=1).reshape(-1, 1) + np.sum(x2**2, axis=1)  - 2 * np.dot(x1, x2.T)
-            K = sigma_f**2 * np.exp(- norm_sq / ((2*l**2)))
-            return K
 
 
     def linear_regression(self):
@@ -207,18 +177,68 @@ class GaussianProcess(Emulator):
         X_d[:,0] = 1
         return X_d
 
-    def nll_fn(self,l):
-            # Naive implementation of Eq. (11). Works well for the examples 
-            # in this article but is numerically less stable compared to 
-            # the implementation in nll_stable below.
-            K = self.squared_exponential(self.input_train,self.input_train,self.sigma_f,l)
-            return 0.5 * np.log(det(K)) + \
-                0.5 * self.output_train.dot(inv(K).dot(self.output_train)) + \
-                0.5 * len(self.input_train) * np.log(2*np.pi)
-
+    
     def optimize(self):
-        res = minimize(self.nll_fn, x0=1, bounds=[[0.00001, None]], method='L-BFGS-B')
-        self.l = res.x
+        """
+        Optimise GP hyperparameters
+
+        Returns:
+        
+
+        """
+        '''
+        def neg_log_marginal_likelihood(sigma_n):
+            
+            #print(sigma_n)
+            #print(self.var_ols)
+            sigma_noise = sigma_n[0]
+            #print(self.var_ols - sigma_noise**2)
+            #print(sigma_noise)
+            sigma_f = np.sqrt(self.var_ols - sigma_noise**2)
+
+            K_XX = self.kernel(self.input_train, self.input_train, sigma_f, self.l) + (sigma_noise**2)*np.eye(len(self.input_train))
+
+            K_XX_inv = np.linalg.inv(K_XX)
+
+            #if np.linalg.det(K_XX) == 0:
+                #return 1
+            #else:
+            return 0.5 * ( (self.output_train.T).dot((K_XX_inv.dot(self.output_train))) + np.log(np.linalg.det(K_XX)) + len(self.input_train)*np.log(2*np.pi) )'''
+        
+        def neg_log_marginal_likelihood(sigma_n):
+
+            sigma_noise = sigma_n[0]
+            #print(self.var_ols - sigma_noise**2)
+            #print(sigma_noise)
+            sigma_f = np.sqrt(self.var_ols - sigma_noise**2)
+
+            K = self.kernel(self.input_train, self.input_train, self.sigma_f, self.l) + (sigma_noise**2)*np.eye(len(self.input_train))
+            y = self.output_train
+            n = len(y)
+
+            L = np.linalg.cholesky(K)
+            alpha_0 = solve_triangular(L, y, lower=True)
+            alpha = solve_triangular(L.T, alpha_0, lower=False)
+
+            # check lower/upper triangles
+            # check if y needs to be transposed
+
+
+            #print(-0.5*(np.dot(y,alpha)) - np.sum(np.log(np.diagonal(L))) - 0.5*n*np.log(2*np.pi))
+            return 0.5*(np.dot(y,alpha)) + np.sum(np.log(np.diagonal(L))) + 0.5*n*np.log(2*np.pi)
+        
+        bounds = [1e-9, np.sqrt(self.var_ols)-1e-9]
+        n_list = []
+        for i in range(10):
+            n_init = (bounds[1] - bounds[0]) * np.random.random() + bounds[0]
+
+            result = minimize(neg_log_marginal_likelihood, x0 = [n_init], bounds=[bounds], method='L-BFGS-B')
+            n_list.append(result.x[0])
+
+        self.sigma_noise = np.mean(n_list)
+
+        self.sigma_f = np.sqrt(self.var_ols - self.sigma_noise**2)
+        
         
 
 class EigenvectorContinuation(Emulator):

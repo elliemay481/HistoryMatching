@@ -75,7 +75,7 @@ def ellipsoid_sample(ndim, Nsamples, Ntraining, mean, covariance):
         u_test[:,i] = norm(loc=0, scale=1).ppf(u_test[:,i])
     
     # Add pertubation to covariance
-    epsilon = 0.001
+    epsilon = 1e-9
     K = covariance + epsilon*np.identity(ndim)
 
     

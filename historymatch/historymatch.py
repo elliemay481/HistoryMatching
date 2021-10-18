@@ -75,7 +75,7 @@ class HistoryMatch:
         if nsamples:
             self.nsamples = nsamples
         else:
-            self.nsamples = 5000
+            self.nsamples = 8000
 
         self.shape = volume_shape
 
@@ -160,50 +160,73 @@ class HistoryMatch:
         return np.sqrt( ( E - z_i )**2  /  ( var_em + var_method + var_obs ) )
 
 
-    def wave(self, nonimplausible_volume, theta_train, theta_test, n_active_params):
+    def wave(self, nonimplausible_volume, theta_train, theta_test):
 
         implausibilities_all = np.zeros((self.nsamples, self.noutputs))
+
+        # for implausibility cutoff determination
+        implausibilities_data = np.zeros((self.nsamples, self.noutputs))
+        Ztest = self.simulator(*theta_test.T)
 
         # run simulator for training points
         Ztrain = self.simulator(*theta_train.T)
 
-        Ztest = self.simulator(*theta_test.T)
+        # for emulator plots
+        theta1 = np.linspace(-1,1,100)
+        theta2 = 0.3*np.ones(100)
+        theta3 = 0.4*np.ones(100)
+        #test_grid = np.concatenate((theta1.reshape(-1,1), theta2.reshape(-1,1), theta3.reshape(-1,1)), axis=1)
+        test_grid = np.concatenate((theta1.reshape(-1,1), theta2.reshape(-1,1), theta3.reshape(-1,1), theta3.reshape(-1,1)), axis=1)
 
+        Z_grid = self.simulator(*test_grid.T)
+
+        output_convergence = np.full(self.noutputs, False, dtype=bool)
 
 
         for output in range(self.noutputs):
-        #for output in range(n_active_params):
 
             Ztrain_i = Ztrain[output]
-            #print(Ztrain_i)
 
             if self.emulator_choice == 'GP':
-                GP = emulators.GaussianProcess(theta_train, Ztrain_i, length_scale=2, signal_sd=0.1, ols_order=1, bayes_linear = True, noise_sd = None)
+                GP = emulators.GaussianProcess(theta_train, Ztrain_i, length_scale=2, signal_sd=0.1, ols_order=1, bayes_linear = True, noise_sd = 1e-9)
             elif self.emulator_choice == 'EC':
                 print('EC not yet developed')
 
             print('Emulating...')
-            #mu0, cov0, sd0 = GP.emulate(theta_test)
+
+            
             #GP.optimize()
+            mu_grid, sd_grid = GP.emulate(test_grid)
+
             mu, sd = GP.emulate(theta_test)
 
             #mu = Ztest[output]
 
-            #sd = np.ones_like(mu) * 0.01
-            #print(np.mean(sd))
-            #print(self.sigma_obs)
+            #sd = np.zeros_like(mu) * 0.01
 
-            if np.mean(sd) < np.sqrt(self.var_obs[output]):
-                print('Mean emulator s.d lower than obs')
+            if np.mean(sd) + 3*np.sqrt(np.var(sd)) < self.sigma_obs[output]:
+                output_convergence[output] = True
+            else:
+                output_convergence[output] = False
 
             
             for i in range(len(theta_test)):
                 implausibilities_all[i, output] = self.implausibility(mu[i], self.Z[output], sd[i]**2, self.var_method, self.var_obs[output])
+
+
+            # for implausibility cutoff determination
+            for i in range(len(theta_test)):
+                implausibilities_data[i, output] = self.implausibility(Ztest[output][i], self.Z[output], 0, self.var_method, self.var_obs[output])
         
-    
+
         # get index of second highest maximum implaus for all outputs
-        max_I = implausibilities_all.argsort()[:,-2]
+        max_I = implausibilities_all.argsort()[:,-1]
+        max2_I = implausibilities_all.argsort()[:,-2]
         implausibilities = implausibilities_all[range(len(max_I)), max_I]
+
+        # for implausibility cutoff determination
+        max_Idata = implausibilities_data.argsort()[:,-1]
+        Idata = implausibilities_data[range(len(max_Idata)), max_Idata]
 
         samples = np.concatenate((theta_test, implausibilities.reshape(-1,1)), axis=1)
         nonimplausible = np.delete(samples, np.where(samples[:,-1] > 3), axis=0)
@@ -214,7 +237,7 @@ class HistoryMatch:
             # ****** fix **********
             self.nonimplausible_volume = utils.locate_boundaries(nonimplausible, self.ndim)
 
-        return self.nonimplausible_volume, nonimplausible, samples, mu, sd, Ztrain[-1]
+        return self.nonimplausible_volume, nonimplausible, samples, mu, sd, Z_grid[-1], mu_grid, sd_grid, output_convergence, implausibilities, Idata
 
 
 
@@ -236,7 +259,7 @@ class HistoryMatch:
         if nwaves:
             self.nwaves = nwaves
         else:
-            self.nwaves = 1
+            self.nwaves = 10
 
         # run number of waves. in each wave:
 
@@ -253,9 +276,9 @@ class HistoryMatch:
         train_list = []
         em_mu = []
         em_sd = []
-        z_train_list = []
-
-        n_active_params = 16
+        z_grid_list = []
+        Itrain_list = []
+        Idata_list = []
 
         for wave in range(self.nwaves):
             print('Running wave ' + str(wave+1))
@@ -264,13 +287,21 @@ class HistoryMatch:
             train_list.append(theta_train)
                 
             # run history matching wave
-            self.nonimplausible_volume, nonimplausible_region, samples, mu, sd, z_train = self.wave(self.nonimplausible_volume, theta_train, theta_test, n_active_params)
+            self.nonimplausible_volume, nonimplausible_region, samples, mu, sd, z_grid, mu_test, sd_test, output_convergence, Itrain, Idata \
+                                                = self.wave(self.nonimplausible_volume, theta_train, theta_test)
 
-            em_mu.append(mu)
-            em_sd.append(sd)
-            z_train_list.append(z_train)
+            print('Convergence : ' + str(np.all(output_convergence)))
 
-            n_active_params =+ 2
+            #if np.all(output_convergence) = True:
+                #end_str = 'Convergence reached after ' + str(wave) + ' waves.'
+                #return end_str
+
+            em_mu.append(mu_test)
+            em_sd.append(sd_test)
+            z_grid_list.append(z_grid)
+            Itrain_list.append(Itrain)
+            Idata_list.append(Idata)
+
             
             
             # generate well space samples in parameter space
@@ -285,45 +316,6 @@ class HistoryMatch:
                 mean = np.mean(nonimplausible_region[:,:-1], axis=0)
                 theta_train, theta_test = sample.ellipsoid_sample(self.ndim, self.nsamples, self.ntraining, mean, K0)
 
-                # discard sample points outside of boundaries
-                # **** FIX BOUNDARIES HERE ********
-                
-                theta_test_reduced = np.delete(theta_test, np.where(np.abs(theta_test) > 1), axis=0)
-                theta_train_reduced = np.delete(theta_train, np.where(np.abs(theta_train) > 1), axis=0)
-            
-                '''
-                while len(theta_test_reduced) < self.nsamples:
-                    N_te = self.nsamples - len(theta_test_reduced)
-                    theta_train_new, theta_test_new = sample.ellipsoid_sample(self.ndim, N_te, 0, mean, K0)
-                    theta_test_new = np.delete(theta_test_new, np.where(np.abs(theta_test_new) > 1)[0], axis=0)
-                    theta_test_reduced = np.concatenate((theta_test_reduced, theta_test_new), axis=0)
-
-                while len(theta_train_reduced) < self.ntraining:
-                    N_tr = self.ntraining - len(theta_train_reduced)
-                    theta_train_new, theta_test_new = sample.ellipsoid_sample(self.ndim, 0, N_tr, mean, K0)
-                    theta_train_new = np.delete(theta_train_new, np.where(np.abs(theta_train_new) > 1)[0], axis=0)
-                    theta_train_reduced = np.concatenate((theta_train_reduced, theta_train_new), axis=0)
-
-                theta_test = theta_test_reduced
-                theta_train = theta_train_reduced
-
-                def Mahalanobis(sample, mean, covariance):
-                    M = np.sqrt((sample - mean).T.dot(np.linalg.inv(covariance).dot((sample - mean))))
-                    return M'''
-                '''
-                delete_pt = 0
-                test_mean = np.mean(theta_test, axis=0)
-                test_cov = np.cov(theta_test.T)
-                for i in range(len(theta_test)):
-                    M = Mahalanobis(theta_test[i], test_mean, test_cov)
-                    if M > 3:
-                        np.delete(theta_test, i)
-                        delete_pt += 1
-
-            print(delete_pt)
-            
-            
-            '''
 
             nonimp_volumes.append(self.nonimplausible_volume)
             nonimp_region_list.append(nonimplausible_region)
@@ -332,7 +324,7 @@ class HistoryMatch:
             cube_volume = utils.hypercube_volume(self.ndim, self.nonimplausible_volume)
             print('Relative nonimplausible volume remaining: ' + str(round(cube_volume/initial_volume,3)))
 
-        return Results({'nonimp_volumes': nonimp_volumes, 'regions': nonimp_region_list, 'samples': sample_list, 'train_pts': train_list, 'test_pts': test_list, 'emulator_mu': em_mu, 'emulator_sd': em_sd, 'z_train': z_train_list})
+        return Results({'nonimp_volumes': nonimp_volumes, 'regions': nonimp_region_list, 'samples': sample_list, 'train_pts': train_list, 'test_pts': test_list, 'emulator_mu': em_mu, 'emulator_sd': em_sd, 'z_grid': z_grid_list, 'Itrain': Itrain_list, 'Idata': Idata_list})
 
 
 
