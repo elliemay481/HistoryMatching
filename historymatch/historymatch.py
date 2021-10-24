@@ -70,7 +70,7 @@ class HistoryMatch:
         if ntraining:
             self.ntraining = ntraining
         else:
-            self.ntraining = 10
+            self.ntraining = 8
 
         if nsamples:
             self.nsamples = nsamples
@@ -176,9 +176,10 @@ class HistoryMatch:
         theta2 = 0.3*np.ones(100)
         theta3 = 0.4*np.ones(100)
         #test_grid = np.concatenate((theta1.reshape(-1,1), theta2.reshape(-1,1), theta3.reshape(-1,1)), axis=1)
-        test_grid = np.concatenate((theta1.reshape(-1,1), theta2.reshape(-1,1), theta3.reshape(-1,1), theta3.reshape(-1,1)), axis=1)
+        #test_grid = np.concatenate((theta1.reshape(-1,1), theta2.reshape(-1,1), theta3.reshape(-1,1)), axis=1)
 
-        Z_grid = self.simulator(*test_grid.T)
+        #Z_grid = self.simulator(*test_grid.T)
+        Z_grid = self.simulator(*theta_test.T)
 
         output_convergence = np.full(self.noutputs, False, dtype=bool)
 
@@ -192,17 +193,22 @@ class HistoryMatch:
             elif self.emulator_choice == 'EC':
                 print('EC not yet developed')
 
-            print('Emulating...')
+            print('Emulating output {}...'.format(output))
 
             
             #GP.optimize()
-            mu_grid, sd_grid = GP.emulate(test_grid)
+            #mu_grid, sd_grid = GP.emulate(test_grid)
 
             mu, sd = GP.emulate(theta_test)
 
+            
+
             #mu = Ztest[output]
 
-            #sd = np.zeros_like(mu) * 0.01
+            #sd = np.ones_like(mu) * 0.1
+
+            mu_grid = np.zeros_like(mu)
+            sd_grid = np.zeros_like(mu)
 
             if np.mean(sd) + 3*np.sqrt(np.var(sd)) < self.sigma_obs[output]:
                 output_convergence[output] = True
@@ -222,14 +228,16 @@ class HistoryMatch:
         # get index of second highest maximum implaus for all outputs
         max_I = implausibilities_all.argsort()[:,-1]
         max2_I = implausibilities_all.argsort()[:,-2]
-        implausibilities = implausibilities_all[range(len(max_I)), max_I]
+        implausibilities = implausibilities_all[range(len(max2_I)), max2_I]
 
         # for implausibility cutoff determination
         max_Idata = implausibilities_data.argsort()[:,-1]
         Idata = implausibilities_data[range(len(max_Idata)), max_Idata]
 
         samples = np.concatenate((theta_test, implausibilities.reshape(-1,1)), axis=1)
-        nonimplausible = np.delete(samples, np.where(samples[:,-1] > 3), axis=0)
+        print(samples.shape)
+        nonimplausible = np.delete(samples, np.where(samples[:,-1] > 2.7), axis=0)
+        print(nonimplausible.shape)
 
         if self.shape == 'hypercube':
             self.nonimplausible_volume = utils.locate_boundaries(nonimplausible, self.ndim)

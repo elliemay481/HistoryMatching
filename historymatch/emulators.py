@@ -177,7 +177,7 @@ class GaussianProcess(Emulator):
         X_d[:,0] = 1
         return X_d
 
-    
+    '''
     def optimize(self):
         """
         Optimise GP hyperparameters
@@ -186,7 +186,7 @@ class GaussianProcess(Emulator):
         
 
         """
-        '''
+        
         def neg_log_marginal_likelihood(sigma_n):
             
             #print(sigma_n)
@@ -203,7 +203,7 @@ class GaussianProcess(Emulator):
             #if np.linalg.det(K_XX) == 0:
                 #return 1
             #else:
-            return 0.5 * ( (self.output_train.T).dot((K_XX_inv.dot(self.output_train))) + np.log(np.linalg.det(K_XX)) + len(self.input_train)*np.log(2*np.pi) )'''
+            return 0.5 * ( (self.output_train.T).dot((K_XX_inv.dot(self.output_train))) + np.log(np.linalg.det(K_XX)) + len(self.input_train)*np.log(2*np.pi) )
         
         def neg_log_marginal_likelihood(sigma_n):
 
@@ -237,7 +237,7 @@ class GaussianProcess(Emulator):
 
         self.sigma_noise = np.mean(n_list)
 
-        self.sigma_f = np.sqrt(self.var_ols - self.sigma_noise**2)
+        self.sigma_f = np.sqrt(self.var_ols - self.sigma_noise**2)'''
         
         
 
