@@ -76,7 +76,6 @@ class GaussianProcess(Emulator):
             Xd = self.design_matrix(self.input_test)
             mu_ols = np.dot(Xd, self.coeff_ols)
 
-            # emulate
             mu = mu_ols + self.K_XsX.dot(self.K_XX_inv).dot(self.output_train - np.mean(self.output_train))
             cov = self.K_XsXs - self.K_XsX.dot(self.K_XX_inv).dot(self.K_XXs)
 
@@ -94,21 +93,35 @@ class GaussianProcess(Emulator):
     def SE(self):
         """Create a squared exponential kernel
 
-        Returns:
-            squared_exponential (function) : A function of two numpy.ndarrays of floats that computes the squared exponential
+        Returns
+        -------
+        squared_exponential: function
+            A function of two numpy.ndarrays of floats that computes the squared exponential
             kernel with given standard deviation and length scale.
         """
 
         def squared_exponential(x1,x2,sigma_f,l):
             """
-            Args:
-                x1 : (n x d) array of floats
-                x2 : (m x d) array of floats
-                sigma (float) : The standard deviation of the kernel.
-                l (float) : The length scale of the kernel.
 
-            Returns:
-                (n x m) covariance matrix
+            Emulates the model output given a set of input parameters.
+
+            Args
+            ----
+            x1 : ndarray, shape (n, d)
+
+            x2 : ndarray, shape (m, d)
+
+            sigma_f : float
+                The standard deviation of the kernel.
+
+            l : float
+                The length scale of the kernel.
+
+
+            Returns
+            -------
+            K : ndarray, shape (n, m)
+                Covariance matrix
             """
 
             if x1.ndim == 1:
@@ -116,10 +129,8 @@ class GaussianProcess(Emulator):
             if x2.ndim == 1:
                 x2 = x2.reshape(-1, 1)
 
-
-            # ****** fix *********
-            norm_sq = np.sum(x1**2, axis=1).reshape(-1, 1) + np.sum(x2**2, axis=1)  - 2 * np.dot(x1, x2.T)
-            K = sigma_f**2 * np.exp(- norm_sq / ((2*l**2)))
+            exp_term = np.exp( - (np.sum(x1**2, axis=1).reshape(-1, 1) + np.sum(x2**2, axis=1)  - 2 * x1.dot(x2.T)) / (2*(l**2)))
+            K = sigma_f**2 * exp_term
             return K
         
         return squared_exponential
@@ -130,11 +141,11 @@ class GaussianProcess(Emulator):
         """Performs linear regression
 
         Returns:
-            coeff : 
+            coeff : ndarray, shape (order,)
                 The regression coefficients.
-            mu_ols : 
+            mu_ols : ndarray, shape (ntraining,)
                 The regression fit to the training samples.
-            var_ols : 
+            var_ols : ndarray, shape (ntraining,)
                 The variance of the fit.
         """
 
@@ -147,7 +158,7 @@ class GaussianProcess(Emulator):
         coeff = solve(X,self.output_train)
 
         mu_ols = np.dot(X, coeff)
-        var_ols = np.dot((self.output_train - mu_train).T, (self.output_train - mu_train)) / len(mu_train)
+        var_ols = np.dot((self.output_train - mu_ols).T, (self.output_train - mu_ols)) / len(mu_ols)
 
         return coeff, mu_ols, var_ols
 

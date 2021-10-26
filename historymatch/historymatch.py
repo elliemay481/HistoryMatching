@@ -3,10 +3,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # internal imports
-import emulators
-import plot
-import utils
-import sample
+from historymatch import emulators
+from historymatch import plot
+from historymatch import utils
+from historymatch import sample
 
 class Results(dict):
     """
@@ -76,7 +76,7 @@ class HistoryMatch:
     def save_model(self, output_filename):
         None
 
-    def initialize_volume(self, min, max):
+    def initialize_volume(self, min_theta, max_theta):
 
         '''
         Args
@@ -89,7 +89,7 @@ class HistoryMatch:
         
         '''
 
-        self.nonimplausible_volume = self.hypercube(min, max)
+        self.nonimplausible_bounds = np.concatenate((np.array(min_theta).reshape(-1,1), np.array(max_theta).reshape(-1,1)), axis=1)
 
     def set_observations(self, obs_data, sigma_obs=0, sigma_method=0,
                             sigma_model=0, sigma_other=0):
@@ -114,24 +114,23 @@ class HistoryMatch:
             Standard deviation of other uncertainties
         
         '''
-
-        self.sigmas = np.array([sigma_obs, sigma_method, sigma_model, sigma_other])
-        assert not all(s == 0 for s in self.sigmas), "At least one standard deviation must be nonzero."
-        self.Z = obs_data
         self.sigma_obs = sigma_obs
+        self.sigmas_mm = np.array([sigma_method, sigma_model])
+        assert not (all(s == 0 for s in self.sigmas_mm) and np.all(self.sigma_obs == 0)), \
+                        "At least one standard deviation must be nonzero."
+        self.Z = obs_data
         self.sigma_method = sigma_method
         self.sigma_model = sigma_model
-        self.sigma_other = sigma_other
         self.noutputs = len(obs_data)
 
 
-    def simulate(self, theta):
+    def simulate(self, *theta):
         if self.simulator is None:
             raise NotImplementedError("Simulator not defined.")
         else:
-            return self.simulator(theta)
+            return self.simulator(*theta)
 
-    def implausibility(self, E, z_i, var_em, var_method, var_obs, var_model):
+    def implausibility(self, E, z_i, var_em, var_obs, var_method, var_model):
 
         """
         Evaluates the implausibility measure given emulator output and observational
@@ -145,13 +144,22 @@ class HistoryMatch:
         z_i : float
             Observational datapoint
 
-        var :
-            Array of uncertainty variances
+        var_em: float
+            Variance of emulator uncertainty
+
+        var_method : float
+            Variance of method uncertainty
+
+        var_model : float
+            Variance of model uncertainty
+
+        var_obs : ndarray, shape (len(obs_data),)
+            Variance of the observational uncertainty for output.
 
         """
         
     
-        return np.sqrt( ( E - z_i )**2  /  np.sum(var) )
+        return np.sqrt( ( E - z_i )**2  /  (var_em + var_obs + var_method + var_model) )
 
 
     def wave(self, theta_train, theta_samples):
@@ -192,7 +200,6 @@ class HistoryMatch:
             elif self.emulator_choice == 'EC':
                 print('EC not yet developed')
 
-            # ***** progress bar?? *********
             print('Emulating output {}...'.format(output))
 
             mu, sd = GP.emulate(theta_samples)
@@ -203,7 +210,8 @@ class HistoryMatch:
                 output_convergence[output] = False
 
             for i in range(len(theta_samples)):
-                implausibilities_all[i, output] = self.implausibility(mu[i], self.Z[output], np.square(self.sigmas))
+                implausibilities_all[i, output] = self.implausibility(mu[i], self.Z[output], sd[i]**2, self.sigma_obs[output]**2,\
+                                                                        self.sigma_method**2, self.sigma_model**2)
         
 
         # get index of second highest maximum implaus for all outputs
@@ -212,7 +220,7 @@ class HistoryMatch:
         max_implausibilities = implausibilities_all[range(len(max2_I)), max2_I]
 
         I_samples = np.concatenate((theta_samples, max_implausibilities.reshape(-1,1)), axis=1)
-        nonimplausible_samples = np.delete(I_samples, np.where(samples[:,-1] > 3), axis=0)
+        nonimplausible_samples = np.delete(I_samples, np.where(I_samples[:,-1] > 3), axis=0)
 
         if self.shape == 'hypercube':
             self.nonimplausible_bounds = utils.locate_boundaries(nonimplausible, self.ndim)
