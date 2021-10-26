@@ -221,3 +221,68 @@ class Gaussian_Process:
             return K
         
         return squared_exponential'''
+
+
+    '''
+    def optimize(self):
+        """
+        Optimise GP hyperparameters
+
+        Returns:
+        
+
+        """
+        
+        def neg_log_marginal_likelihood(sigma_n):
+            
+            #print(sigma_n)
+            #print(self.var_ols)
+            sigma_noise = sigma_n[0]
+            #print(self.var_ols - sigma_noise**2)
+            #print(sigma_noise)
+            sigma_f = np.sqrt(self.var_ols - sigma_noise**2)
+
+            K_XX = self.kernel(self.input_train, self.input_train, sigma_f, self.l) + (sigma_noise**2)*np.eye(len(self.input_train))
+
+            K_XX_inv = np.linalg.inv(K_XX)
+
+            #if np.linalg.det(K_XX) == 0:
+                #return 1
+            #else:
+            return 0.5 * ( (self.output_train.T).dot((K_XX_inv.dot(self.output_train))) + np.log(np.linalg.det(K_XX)) + len(self.input_train)*np.log(2*np.pi) )
+        
+        def neg_log_marginal_likelihood(sigma_n):
+
+            sigma_noise = sigma_n[0]
+            #print(self.var_ols - sigma_noise**2)
+            #print(sigma_noise)
+            sigma_f = np.sqrt(self.var_ols - sigma_noise**2)
+
+            K = self.kernel(self.input_train, self.input_train, self.sigma_f, self.l) + (sigma_noise**2)*np.eye(len(self.input_train))
+            y = self.output_train
+            n = len(y)
+
+            L = np.linalg.cholesky(K)
+            alpha_0 = solve_triangular(L, y, lower=True)
+            alpha = solve_triangular(L.T, alpha_0, lower=False)
+
+            # check lower/upper triangles
+            # check if y needs to be transposed
+
+
+            #print(-0.5*(np.dot(y,alpha)) - np.sum(np.log(np.diagonal(L))) - 0.5*n*np.log(2*np.pi))
+            return 0.5*(np.dot(y,alpha)) + np.sum(np.log(np.diagonal(L))) + 0.5*n*np.log(2*np.pi)
+        
+        bounds = [1e-9, np.sqrt(self.var_ols)-1e-9]
+        n_list = []
+        for i in range(10):
+            n_init = (bounds[1] - bounds[0]) * np.random.random() + bounds[0]
+
+            result = minimize(neg_log_marginal_likelihood, x0 = [n_init], bounds=[bounds], method='L-BFGS-B')
+            n_list.append(result.x[0])
+
+        self.sigma_noise = np.mean(n_list)
+
+        self.sigma_f = np.sqrt(self.var_ols - self.sigma_noise**2)'''
+        
+        
