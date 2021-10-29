@@ -4,6 +4,8 @@ import numpy as np
 from math import factorial
 from scipy.optimize import minimize
 from numpy.linalg import cholesky, det, inv
+#import GPy
+
 
 class Emulator(ABC):
 
@@ -42,7 +44,7 @@ class GaussianProcess(Emulator):
         self.kernel = self.SE()
         self.order = ols_order
         self.bayes_linear = bayes_linear
-
+        
         if self.bayes_linear == True:
             # perform linear regression
             coeff_ols, train_ols, var_ols = self.linear_regression()
@@ -50,11 +52,9 @@ class GaussianProcess(Emulator):
             self.var_ols = var_ols
             self.train_ols = train_ols
             self.sigma_f = np.sqrt(var_ols)
+            #print(self.sigma_f)
 
-
-    def emulate(self, param_samples):
-
-        self.input_test = param_samples
+        
 
         K_XX = self.kernel(self.input_train, self.input_train, self.sigma_f, self.l) + (self.sigma_noise**2)*np.eye(len(self.input_train))
         K_XX_inv = np.linalg.inv(K_XX)
@@ -62,13 +62,33 @@ class GaussianProcess(Emulator):
         self.K_XX = K_XX
         self.K_XX_inv = K_XX_inv
         
+        
+        #kern = GPy.kern.RBF(input_dim=self.ndim, variance=1., lengthscale=1.)
+        #m = GPy.models.GPRegression(input_train,output_train.reshape(-1,1),kern)
+        #m.optimize(messages=False)
+        #self.m = m
+
+
+
+
+    def emulate(self, param_samples):
+
+        
+        self.input_test = param_samples
+
+        #K_XX = self.kernel(self.input_train, self.input_train, self.sigma_f, self.l) + (self.sigma_noise**2)*np.eye(len(self.input_train))
+        #K_XX_inv = np.linalg.inv(K_XX)
+
+        #self.K_XX = K_XX
+        #self.K_XX_inv = K_XX_inv
+        
         K_XsX = self.kernel(self.input_test, self.input_train, self.sigma_f, self.l)
         K_XXs = self.kernel(self.input_train, self.input_test, self.sigma_f, self.l)
-        K_XsXs = self.kernel(self.input_test, self.input_test, self.sigma_f, self.l)
+        #K_XsXs = self.kernel(self.input_test, self.input_test, self.sigma_f, self.l)
 
         self.K_XsX = K_XsX
         self.K_XXs = K_XXs
-        self.K_XsXs = K_XsXs
+        #self.K_XsXs = K_XsXs
 
         
 
@@ -77,15 +97,33 @@ class GaussianProcess(Emulator):
             mu_ols = np.dot(Xd, self.coeff_ols)
 
             mu = mu_ols + self.K_XsX.dot(self.K_XX_inv).dot(self.output_train - np.mean(self.output_train))
-            cov = self.K_XsXs - self.K_XsX.dot(self.K_XX_inv).dot(self.K_XXs)
+            #cov = self.sigma_f**2 - self.K_XsX.dot(self.K_XX_inv).dot(self.K_XXs)
+            # ********** check correct *************
+            print('ein: ')
+            
+            #print(np.einsum('ij,jk,ki->i', self.K_XsX, self.K_XX_inv, self.K_XXs))
+            #print('diag: ')
+            #print(np.diag(self.K_XsX.dot(self.K_XX_inv).dot(self.K_XXs)))
+            cov_diag = self.sigma_f**2 + self.sigma_f**2 - np.einsum('ij,ji->i', np.dot(self.K_XsX, self.K_XX_inv), self.K_XXs)
+            #cov_diag = self.sigma_f**2 - np.einsum('ij,ji->i',self.K_XsX.dot,)
 
-            variance = np.abs(np.diag(cov))
-            sd = np.sqrt(variance)
+            
+
+            #print(self.sigma_f**2)
+            #variance = np.abs(np.diag(cov))
+            sd = np.sqrt(np.abs(cov_diag))
+            #print(sd)
 
         else:
             mu = self.K_XsX.dot(self.K_XX_inv).dot(self.output_train)
             cov = self.K_XsXs - self.K_XsX.dot(self.K_XX_inv).dot(self.K_XXs)
             sd = np.sqrt(np.abs(np.diag(cov)))
+
+        
+
+        #mu, sd = self.m.predict(param_samples)
+
+
 
         return mu, sd
 

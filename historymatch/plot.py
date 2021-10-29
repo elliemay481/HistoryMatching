@@ -60,7 +60,10 @@ def plot_implausibility2D(samples, parameter_bounds, parameters, bins=20, Fig=No
     xbound0 = parameter_bounds[0, 0]
     xbound1 = parameter_bounds[0, 1]
     bin_width = (xbound1 - xbound0)/bins
+
+    print(bin_width)
     bin_height = (ybound1 - ybound0)/bins
+    print(bin_height)
 
     implausibilities = np.zeros((bins, bins))
     xvals = np.linspace(xbound0,xbound1,bins)
@@ -106,8 +109,8 @@ def plot_implausibility2D(samples, parameter_bounds, parameters, bins=20, Fig=No
     im = ax.contourf(xvals, yvals, implausibilities, **plot_kwargs)
 
     
-    ax.set_xlim([parameter_bounds[0,0], parameter_bounds[0,1]])
-    ax.set_ylim([parameter_bounds[1,0], parameter_bounds[1,1]])
+    #ax.set_xlim([parameter_bounds[0,0], parameter_bounds[0,1]])
+    #ax.set_ylim([parameter_bounds[1,0], parameter_bounds[1,1]])
     
     if labels:
         ax.set_xlabel(labels[parameters[0]])
@@ -385,3 +388,34 @@ def opticaldepth_1D(samples, parameter_bounds, parameter, bins=20, Fig=None, lab
 
     if label:
         ax.set_xlabel(label)
+
+
+def get_cov_ellipse(cov, centre, nstd, chi, ax, color):
+    """
+    Return a matplotlib Ellipse patch representing the covariance matrix
+    cov centred at centre and scaled by the factor nstd.
+
+    """
+
+    # Find and sort eigenvalues and eigenvectors into descending order
+    eigvals, eigvecs = np.linalg.eigh(cov)
+    order = eigvals.argsort()[::-1]
+    eigvals, eigvecs = eigvals[order], eigvecs[:, order]
+
+    # The anti-clockwise angle to rotate our ellipse by 
+    vx, vy = eigvecs[:,0][0], eigvecs[:,0][1]
+    theta = np.arctan2(vy, vx)
+
+    # Width and height of ellipse to draw
+    width, height = 2 * np.sqrt(chi*np.abs(eigvals))
+    
+    
+    
+    t = np.linspace(0, 2*np.pi, 100)
+    Ell = np.array([0.5*width*np.cos(t) , 0.5*height*np.sin(t)]) 
+    R_rot = np.array([[np.cos(theta) , -np.sin(theta)],[np.sin(theta), np.cos(theta)]])  
+    Ell_rot = np.zeros((2,Ell.shape[1]))
+    for i in range(Ell.shape[1]):
+        Ell_rot[:,i] = np.dot(R_rot,Ell[:,i])
+    
+    ax.plot( centre[0]+Ell_rot[0,:] , centre[1]+Ell_rot[1,:], linewidth='3', color=color)
