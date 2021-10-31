@@ -9,7 +9,7 @@ import numpy as np
 def hypercube_volume(ndim, bounds):
         volume = 1
         for i in range(ndim):
-            volume *= bounds[i,1] - bounds[i,0]
+            volume *= np.abs(bounds[i,1] - bounds[i,0])
         return volume
 
 

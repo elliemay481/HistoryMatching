@@ -17,7 +17,6 @@ def LHsampling(ndim, Ntraining, limits):
     
     # generate sample points
     input_train = lhs(ndim, samples=Ntraining, criterion='center')
-    print(limits.shape)
     
     # adjust sample points for parameter ranges
     for i in range(ndim):

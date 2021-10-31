@@ -4,7 +4,7 @@ import numpy as np
 from math import factorial
 from scipy.optimize import minimize
 from numpy.linalg import cholesky, det, inv
-#import GPy
+import GPy
 
 
 class Emulator(ABC):
@@ -55,7 +55,7 @@ class GaussianProcess(Emulator):
             #print(self.sigma_f)
 
         
-
+        
         K_XX = self.kernel(self.input_train, self.input_train, self.sigma_f, self.l) + (self.sigma_noise**2)*np.eye(len(self.input_train))
         K_XX_inv = np.linalg.inv(K_XX)
 
@@ -98,19 +98,8 @@ class GaussianProcess(Emulator):
 
             mu = mu_ols + self.K_XsX.dot(self.K_XX_inv).dot(self.output_train - np.mean(self.output_train))
             #cov = self.sigma_f**2 - self.K_XsX.dot(self.K_XX_inv).dot(self.K_XXs)
-            # ********** check correct *************
-            print('ein: ')
-            
-            #print(np.einsum('ij,jk,ki->i', self.K_XsX, self.K_XX_inv, self.K_XXs))
-            #print('diag: ')
-            #print(np.diag(self.K_XsX.dot(self.K_XX_inv).dot(self.K_XXs)))
-            cov_diag = self.sigma_f**2 + self.sigma_f**2 - np.einsum('ij,ji->i', np.dot(self.K_XsX, self.K_XX_inv), self.K_XXs)
-            #cov_diag = self.sigma_f**2 - np.einsum('ij,ji->i',self.K_XsX.dot,)
+            cov_diag = self.sigma_f**2 - np.einsum('ij,ji->i', np.dot(self.K_XsX, self.K_XX_inv), self.K_XXs)
 
-            
-
-            #print(self.sigma_f**2)
-            #variance = np.abs(np.diag(cov))
             sd = np.sqrt(np.abs(cov_diag))
             #print(sd)
 

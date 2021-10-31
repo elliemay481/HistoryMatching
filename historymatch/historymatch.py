@@ -69,7 +69,7 @@ class HistoryMatch:
         if nsamples:
             self.nsamples = nsamples
         else:
-            self.nsamples = 2000
+            self.nsamples = 20000
 
         self.shape = volume_shape
         self.Z = None
@@ -201,7 +201,7 @@ class HistoryMatch:
             Ztrain = self.simulate(*theta_train.T, variables_i=self.variables[output])
             
             #corr_length = self.nonimplausible_bounds[:,1]- self.nonimplausible_bounds[:,0]
-            corr_length = 5
+            corr_length = 1
             
             if self.emulator_choice == 'GP':
                 GP = emulators.GaussianProcess(theta_train, Ztrain, length_scale=corr_length, signal_sd=100, bayes_linear = True, noise_sd = 1e-9)
@@ -210,29 +210,13 @@ class HistoryMatch:
 
             #print('Emulating output {}...'.format(output))
 
-
-
-
-            #mu = self.simulate(*theta_samples.T, variables_i=self.variables[output])
-            #sd = np.zeros(len(mu))
-            mu, sd = GP.emulate(theta_samples)
-
-            #print(self.Z[output])
-            #print(mu)
-
-            print('mean em sd : ' + str(np.mean(sd)))
-            print('min em sd : ' + str(np.min(sd)))
-            print('max em sd : ' + str(np.max(sd)))
-
-            #mu = mu.flatten()
-
-            #testmu = self.simulate(*testgrid.T, variables_i=self.variables[output])
-            #print(testmu)
-            #print(self.Z[output])
+            mu = self.simulate(*theta_samples.T, variables_i=self.variables[output])
+            sd = np.zeros(len(mu))
+            
+            #mu, sd = GP.emulate(theta_samples)
 
             if np.mean(sd) + 3*np.sqrt(np.var(sd)) < self.sigma_model:
                 output_convergence[output] = True
-                #print('true')
             else:
                 output_convergence[output] = False
 
@@ -244,20 +228,12 @@ class HistoryMatch:
                                                                         self.sigma_method**2, self.sigma_model**2)
 
 
-                    
-                #print(self.variables[output])
-                #print(theta_samples[i])
-                #print(mu[i])
-                #print(self.Z[output])
-                #print(implausibilities_all[i, output])
-
-
         # get index of second highest maximum implaus for all outputs
         if self.noutputs < 2:
             max_I = implausibilities_all.argsort()[:,-1]
             max_implausibilities = implausibilities_all[range(len(max_I)), max_I]
         else:
-            max2_I = implausibilities_all.argsort()[:,-2]
+            max2_I = implausibilities_all.argsort()[:,-1]
             max_implausibilities = implausibilities_all[range(len(max2_I)), max2_I]
 
         I_samples = np.concatenate((theta_samples, max_implausibilities.reshape(-1,1)), axis=1)

@@ -61,9 +61,7 @@ def plot_implausibility2D(samples, parameter_bounds, parameters, bins=20, Fig=No
     xbound1 = parameter_bounds[0, 1]
     bin_width = (xbound1 - xbound0)/bins
 
-    print(bin_width)
     bin_height = (ybound1 - ybound0)/bins
-    print(bin_height)
 
     implausibilities = np.zeros((bins, bins))
     xvals = np.linspace(xbound0,xbound1,bins)
