@@ -64,7 +64,7 @@ class HistoryMatch:
         if ntraining:
             self.ntraining = ntraining
         else:
-            self.ntraining = 100
+            self.ntraining = 300
 
         if nsamples:
             self.nsamples = nsamples
@@ -166,6 +166,7 @@ class HistoryMatch:
 
         """
         
+
     
         return np.sqrt( ( E - z_i )**2  /  (var_em + var_obs + var_method + var_model) )
 
@@ -201,7 +202,7 @@ class HistoryMatch:
             Ztrain = self.simulate(*theta_train.T, variables_i=self.variables[output])
             
             #corr_length = self.nonimplausible_bounds[:,1]- self.nonimplausible_bounds[:,0]
-            corr_length = 1
+            corr_length = 5
             
             if self.emulator_choice == 'GP':
                 GP = emulators.GaussianProcess(theta_train, Ztrain, length_scale=corr_length, signal_sd=100, bayes_linear = True, noise_sd = 1e-9)
@@ -215,6 +216,8 @@ class HistoryMatch:
             
             #mu, sd = GP.emulate(theta_samples)
 
+            #print(sd)
+
             if np.mean(sd) + 3*np.sqrt(np.var(sd)) < self.sigma_model:
                 output_convergence[output] = True
             else:
@@ -226,14 +229,16 @@ class HistoryMatch:
             for i in range(len(theta_samples)):
                 implausibilities_all[i, output] = self.implausibility(mu[i], self.Z[output], sd[i]**2, self.sigma_obs[output]**2,\
                                                                         self.sigma_method**2, self.sigma_model**2)
-
+                #if implausibilities_all[i, output] < 3:
+                    #print('-')
+                    #print(sd[i])
 
         # get index of second highest maximum implaus for all outputs
         if self.noutputs < 2:
             max_I = implausibilities_all.argsort()[:,-1]
             max_implausibilities = implausibilities_all[range(len(max_I)), max_I]
         else:
-            max2_I = implausibilities_all.argsort()[:,-1]
+            max2_I = implausibilities_all.argsort()[:,-2]
             max_implausibilities = implausibilities_all[range(len(max2_I)), max2_I]
 
         I_samples = np.concatenate((theta_samples, max_implausibilities.reshape(-1,1)), axis=1)
@@ -277,6 +282,10 @@ class HistoryMatch:
 
         # initialise training set and parameter space
         theta_train, theta_samples = sample.hypercube_sample(self.ndim, self.nsamples, self.ntraining, self.nonimplausible_bounds)
+        #theta_train, theta_samples = sample.ellipsoid_sample(self.ndim, self.nsamples, self.ntraining, np.zeros(self.ndim), np.identity(self.ndim))
+        
+        
+
 
         # calculate initial parameter volume
         initial_volume = utils.hypercube_volume(self.ndim, self.nonimplausible_bounds)
@@ -300,13 +309,12 @@ class HistoryMatch:
                                         = self.wave(theta_train, theta_samples)
 
             print('Convergence : ' + str(np.all(output_convergence)))
-
             #if np.all(output_convergence) = True:
                 #end_str_conv = 'Convergence reached after ' + str(wave) + ' waves.'
                 #return end_str_conv
             
             if nonimplausible_samples.shape[0] == 0:
-                end_str = 'Nonimplausible volume empty. Terminated after ' + str(wave) + ' waves.'
+                end_str_empty = 'Nonimplausible volume empty. Terminated after ' + str(wave) + ' waves.'
                 return end_str_empty
 
             # generate well space samples in parameter space
