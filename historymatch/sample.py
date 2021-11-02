@@ -25,6 +25,19 @@ def LHsampling(ndim, Ntraining, limits):
     return input_train
 
 
+def grid_sample(ndim, Nsamples, limits):
+
+    n = int(round(np.cbrt(Nsamples)))
+
+    a = np.linspace(limits[0,0],limits[0,1],n)
+    b = np.linspace(limits[1,0],limits[1,1],n)
+    c = np.linspace(limits[2,0],limits[2,1],n)
+
+    d = np.array(np.meshgrid(a, b, c)).T.reshape(-1,3)
+
+    return d
+
+
 
 
 def hypercube_sample(ndim, Nsamples, Ntraining, limits):
@@ -45,6 +58,8 @@ def hypercube_sample(ndim, Nsamples, Ntraining, limits):
     # generate sample points on Latin Hypercube
     input_test = LHsampling(ndim, Nsamples, limits)
     input_train = LHsampling(ndim, Ntraining, limits)
+
+    print(input_train.shape)
 
     return input_train, input_test
 
