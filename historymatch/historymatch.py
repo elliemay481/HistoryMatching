@@ -69,7 +69,7 @@ class HistoryMatch:
         if nsamples:
             self.nsamples = nsamples
         else:
-            self.nsamples = int(60**3)
+            self.nsamples = 2 * (10**5)
 
         self.shape = volume_shape
         self.Z = None
@@ -94,7 +94,7 @@ class HistoryMatch:
         self.nonimplausible_bounds = np.concatenate((np.array(min_theta).reshape(-1,1), np.array(max_theta).reshape(-1,1)), axis=1)
 
     def set_observations(self, obs_data, variables=None, sigma_obs=0, sigma_method=0,
-                            sigma_model=0, sigma_other=0):
+                            sigma_model=0, outputs_per_wave = None ):
 
         '''
         Args
@@ -126,7 +126,12 @@ class HistoryMatch:
         self.Z = obs_data
         self.sigma_method = sigma_method
         self.sigma_model = sigma_model
-        self.noutputs = len(obs_data)
+        if outputs_per_wave == None:
+            self.noutputs_list = []
+            self.noutputs = len(obs_data)
+        else:
+            self.noutputs_list = outputs_per_wave
+            self.noutputs = self.noutputs_list[0]
         self.variables = variables
 
 
@@ -303,6 +308,12 @@ class HistoryMatch:
             # run history matching wave
             self.nonimplausible_bounds, nonimplausible_samples, I_samples, mu, sd, output_convergence,\
                                         = self.wave(theta_train, theta_samples)
+
+
+            if wave+1 < len(self.noutputs_list):
+                self.noutputs = self.noutputs_list[wave+1]
+            else:
+                self.noutputs = len(self.Z)
 
             print('Convergence : ' + str(np.all(output_convergence)))
             #if np.all(output_convergence) = True:

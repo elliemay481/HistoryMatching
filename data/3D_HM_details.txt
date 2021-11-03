@@ -1,0 +1,2 @@
+Nsamples Noutputs StartZ EndZ
+200000 24 20 258
