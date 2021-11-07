@@ -48,7 +48,7 @@ def plot_implausibility2D(samples, parameter_bounds, parameters, bins=20, Fig=No
 
     """
 
-
+    print('implaus2D')
     if Fig == None:
         fig, ax = plt.subplots()
     else:
@@ -76,15 +76,14 @@ def plot_implausibility2D(samples, parameter_bounds, parameters, bins=20, Fig=No
             xbin1 = xbin0 + bin_height
 
             # find points within bin
-            y_indices = np.where(np.logical_and(samples[:,parameters[1]]>=ybin0, samples[:,parameters[1]]<ybin1))
-            x_indices = np.where(np.logical_and(samples[:,parameters[0]]>=xbin0, samples[:,parameters[0]]<xbin1))
+            y_indices = np.where(np.logical_and(samples[:,parameters[1]]>=ybin0, samples[:,parameters[1]]<ybin1))[0]
+            x_indices = np.where(np.logical_and(samples[:,parameters[0]]>=xbin0, samples[:,parameters[0]]<xbin1))[0]
             bin_indices = np.intersect1d(x_indices, y_indices)
             # find minimised implausibility over remaining dimensions
             if bin_indices.shape[0] != 0:
                 implausibilities[i,j] = samples[bin_indices][:,-1].min()
             else:
                 implausibilities[i,j] = np.NaN
-
     
     clevels=[0,0.5,1,1.5,2,2.5,3,3.5]
 
@@ -107,8 +106,8 @@ def plot_implausibility2D(samples, parameter_bounds, parameters, bins=20, Fig=No
     im = ax.contourf(xvals, yvals, implausibilities, **plot_kwargs)
 
     
-    #ax.set_xlim([parameter_bounds[0,0], parameter_bounds[0,1]])
-    #ax.set_ylim([parameter_bounds[1,0], parameter_bounds[1,1]])
+    ax.set_xlim([parameter_bounds[0,0], parameter_bounds[0,1]])
+    ax.set_ylim([parameter_bounds[1,0], parameter_bounds[1,1]])
     
     if labels:
         ax.set_xlabel(labels[parameters[0]])
@@ -162,7 +161,7 @@ def opticaldepth_2D(samples, parameter_bounds, parameters, bins=20, Fig=None, co
 
     """
 
-
+    print('opt2D')
     if Fig == None:
         fig, ax = plt.subplots()
     else:
@@ -189,8 +188,8 @@ def opticaldepth_2D(samples, parameter_bounds, parameters, bins=20, Fig=None, co
             xbin1 = xbin0 + bin_height
 
             # find points within bin
-            y_indices = np.where(np.logical_and(samples[:,parameters[1]]>=ybin0, samples[:,parameters[1]]<ybin1))
-            x_indices = np.where(np.logical_and(samples[:,parameters[0]]>=xbin0, samples[:,parameters[0]]<xbin1))
+            y_indices = np.where(np.logical_and(samples[:,parameters[1]]>=ybin0, samples[:,parameters[1]]<ybin1))[0]
+            x_indices = np.where(np.logical_and(samples[:,parameters[0]]>=xbin0, samples[:,parameters[0]]<xbin1))[0]
             bin_indices = np.intersect1d(x_indices, y_indices)
             # count nonimplausible points over remaining dimensions
             n_pts = np.count_nonzero(samples[bin_indices][:,-1] < 3)
@@ -345,7 +344,7 @@ def opticaldepth_1D(samples, parameter_bounds, parameter, bins=20, Fig=None, lab
         Additional keyword arguments passed to 'axes.bar'.
     
     """
-
+    print('opt1D')
     if Fig == None:
         fig = plt.figure()
     else:
@@ -415,5 +414,5 @@ def get_cov_ellipse(cov, centre, nstd, chi, ax, color):
     Ell_rot = np.zeros((2,Ell.shape[1]))
     for i in range(Ell.shape[1]):
         Ell_rot[:,i] = np.dot(R_rot,Ell[:,i])
-    
+
     ax.plot( centre[0]+Ell_rot[0,:] , centre[1]+Ell_rot[1,:], linewidth='3', color=color)

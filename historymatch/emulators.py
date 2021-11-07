@@ -4,7 +4,7 @@ import numpy as np
 from math import factorial
 from scipy.optimize import minimize
 from numpy.linalg import cholesky, det, inv
-#import GPy
+import GPy
 
 
 class Emulator(ABC):
@@ -55,18 +55,18 @@ class GaussianProcess(Emulator):
             #print(self.sigma_f)
 
         
-        
+        '''
         K_XX = self.kernel(self.input_train, self.input_train, self.sigma_f, self.l) + (self.sigma_noise**2)*np.eye(len(self.input_train))
         K_XX_inv = np.linalg.inv(K_XX)
 
         self.K_XX = K_XX
         self.K_XX_inv = K_XX_inv
+        '''
         
-        
-        #kern = GPy.kern.RBF(input_dim=self.ndim, variance=1., lengthscale=1.)
-        #m = GPy.models.GPRegression(input_train,output_train.reshape(-1,1),kern)
-        #m.optimize(messages=False)
-        #self.m = m
+        kern = GPy.kern.RBF(input_dim=self.ndim, variance=1., lengthscale=1.)
+        m = GPy.models.GPRegression(input_train,output_train.reshape(-1,1),kern)
+        m.optimize(messages=False)
+        self.m = m
 
 
 
@@ -81,7 +81,7 @@ class GaussianProcess(Emulator):
 
         #self.K_XX = K_XX
         #self.K_XX_inv = K_XX_inv
-        
+        '''
         K_XsX = self.kernel(self.input_test, self.input_train, self.sigma_f, self.l)
         K_XXs = self.kernel(self.input_train, self.input_test, self.sigma_f, self.l)
         #K_XsXs = self.kernel(self.input_test, self.input_test, self.sigma_f, self.l)
@@ -106,11 +106,11 @@ class GaussianProcess(Emulator):
         else:
             mu = self.K_XsX.dot(self.K_XX_inv).dot(self.output_train)
             cov = self.K_XsXs - self.K_XsX.dot(self.K_XX_inv).dot(self.K_XXs)
-            sd = np.sqrt(np.abs(np.diag(cov)))
+            sd = np.sqrt(np.abs(np.diag(cov)))'''
 
         
 
-        #mu, sd = self.m.predict(param_samples)
+        mu, sd = self.m.predict(param_samples)
 
 
 

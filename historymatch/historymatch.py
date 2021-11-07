@@ -64,12 +64,12 @@ class HistoryMatch:
         if ntraining:
             self.ntraining = ntraining
         else:
-            self.ntraining = 8
+            self.ntraining = 5
 
         if nsamples:
             self.nsamples = nsamples
         else:
-            self.nsamples = 2 * (10**5)
+            self.nsamples = 2 * (10**4)
 
         self.shape = volume_shape
         self.Z = None
@@ -120,12 +120,14 @@ class HistoryMatch:
         
         '''
         self.sigma_obs = sigma_obs
-        self.sigmas_mm = np.array([sigma_method, sigma_model])
-        assert not (all(s == 0 for s in self.sigmas_mm) and np.all(self.sigma_obs == 0)), \
-                        "At least one standard deviation must be nonzero."
+        self.sigma_model = sigma_model
+        self.sigma_method = sigma_method
+        #self.sigmas_mm = np.array([sigma_method, sigma_model])
+        #assert not (all(s == 0 for s in self.sigmas_mm) and np.all(self.sigma_obs == 0)), \
+                        #"At least one standard deviation must be nonzero."
         self.Z = obs_data
         self.sigma_method = sigma_method
-        self.sigma_model = sigma_model
+        self.all_sigma_model = sigma_model
         if outputs_per_wave == None:
             self.noutputs_list = []
             self.noutputs = len(obs_data)
@@ -178,6 +180,7 @@ class HistoryMatch:
 
     def wave(self, theta_train, theta_samples):
 
+
         """
         Performs a single wave of history matching.
 
@@ -217,21 +220,21 @@ class HistoryMatch:
 
             #print('Emulating output {}...'.format(output))
 
-            mu = self.simulate(*theta_samples.T, variables_i=self.variables[output])
+            #mu = self.simulate(*theta_samples.T, variables_i=self.variables[output])
 
-            sd = np.zeros(len(mu))
+            #sd = np.zeros(len(mu))
             
-            #mu, sd = GP.emulate(theta_samples)
+            mu, sd = GP.emulate(theta_samples)
 
 
-            if np.mean(sd) + 3*np.sqrt(np.var(sd)) < self.sigma_model:
+            if np.mean(sd) + 3*np.sqrt(np.var(sd)) < self.sigma_model[output]:
                 output_convergence[output] = True
             else:
                 output_convergence[output] = False
 
             for i in range(len(theta_samples)):
                 implausibilities_all[i, output] = self.implausibility(mu[i], self.Z[output], sd[i]**2, self.sigma_obs[output]**2,\
-                                                                        self.sigma_method**2, self.sigma_model**2)
+                                                                        self.sigma_method**2, self.sigma_model[output]**2)
 
 
         # get index of second highest maximum implaus for all outputs
@@ -239,24 +242,24 @@ class HistoryMatch:
             max_I = implausibilities_all.argsort()[:,-1]
             max_implausibilities = implausibilities_all[range(len(max_I)), max_I]
         else:
-            max2_I = implausibilities_all.argsort()[:,-1]
+            max2_I = implausibilities_all.argsort()[:,-2]
             print(max2_I)
             max_implausibilities = implausibilities_all[range(len(max2_I)), max2_I]
 
         I_samples = np.concatenate((theta_samples, max_implausibilities.reshape(-1,1)), axis=1)
         nonimplausible_samples = np.delete(I_samples, np.where(I_samples[:,-1] > 3), axis=0)
 
-        print(nonimplausible_samples.shape)
+        print('Number of Non-Implausible Samples : ' + str(nonimplausible_samples.shape))
         if self.shape == 'hypercube':
             self.nonimplausible_bounds = utils.locate_boundaries(nonimplausible_samples, self.ndim)
         elif self.shape == 'hypercube_rot':
             # ***** fix **********
-            training_rot, samples_rot = sample.rotated_hypercube_samples(self.ndim, nonimplausible_samples[:,:-1], self.nsamples, self.ntraining)
-            self.nonimplausible_bounds = samples_rot
+            #training_rot, samples_rot = sample.rotated_hypercube_samples(self.ndim, nonimplausible_samples[:,:-1], self.nsamples, self.ntraining)
+            self.nonimplausible_bounds = utils.locate_boundaries(nonimplausible_samples[:,:-1], self.ndim)
         else:
             # ****** fix **********
             self.nonimplausible_bounds = utils.locate_boundaries(nonimplausible_samples, self.ndim)
-
+        print(self.nonimplausible_bounds)
         return self.nonimplausible_bounds, nonimplausible_samples, I_samples, mu, sd, output_convergence
 
 

@@ -102,33 +102,31 @@ def ellipsoid_sample(ndim, Nsamples, Ntraining, mean, covariance):
     return input_train.T, input_test.T
 
 
-def rotated_hypercube_samples(self, ndim, nonimp_vol, Nsamples, Ntraining):
+def rotated_hypercube_samples(ndim, nonimp_vol, Nsamples, Ntraining):
 
     # ********* unfinished **********
-    eigvals, eigvecs = np.linalg.eigh(np.cov(nonimp_vol.T))
+    eigvals, eigvecs = np.linalg.eig(np.cov(nonimp_vol.T))
     R = np.concatenate((eigvecs[0].reshape(-1,1),eigvecs[1].reshape(-1,1),eigvecs[2].reshape(-1,1),eigvecs[3].reshape(-1,1),eigvecs[4].reshape(-1,1),eigvecs[5].reshape(-1,1)),axis=1)
 
+    nonimp_str = nonimp_vol.dot(np.linalg.inv(R))
 
-    nonimp_str = np.zeros((len(nonimp_vol),ndim))
-    for i in range(len(nonimp_vol)):
-        nonimp_str[i] = np.dot(R.T, nonimp_vol[i])
-
-    bounds = utils.locate_boundaries(nonimp_str, ndim)
+    #bounds = utils.locate_boundaries(nonimp_str, ndim)
+    bounds = utils.locate_boundaries(nonimp_vol, ndim)
 
     #print('x :' + str(bounds[0,1]-bounds[0,0]))
     #print('y :' + str(bounds[1,1]-bounds[1,0]))
     #print('z :' + str(bounds[2,1]-bounds[2,0]))
 
-    samples_test = self.LHsampling(ndim, Nsamples, bounds)
-    samples_train = self.LHsampling(ndim, Ntraining, bounds)
+    samples_test = LHsampling(ndim, Nsamples, bounds)
+    samples_train = LHsampling(ndim, Ntraining, bounds)
 
     input_test = np.zeros((len(samples_test),ndim))
     input_train = np.zeros((len(samples_train),ndim))
 
     for i in range(len(samples_test)):
-        input_test[i] = np.dot(R, samples_test[i])
+        input_test[i] = samples_test[i].dot(R)
 
     for i in range(len(samples_train)):
-        input_train[i] = np.dot(R, samples_train[i])
+        input_train[i] = samples_train[i].dot(R)
 
     return input_train, input_test
