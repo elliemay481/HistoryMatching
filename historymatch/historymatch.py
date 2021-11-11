@@ -55,7 +55,7 @@ class HistoryMatch:
     
     def __init__(self, ndim, emulator='GP', volume_shape='hypercube', ntraining=None, nsamples=None):
 
-        self.ndim = ndim
+        self.ndim = ndim - 1
 
         self.simulator = None
         
@@ -73,6 +73,7 @@ class HistoryMatch:
 
         self.shape = volume_shape
         self.Z = None
+        self.wavecount = 0
 
     
     def save_model(self, output_filename):
@@ -137,13 +138,13 @@ class HistoryMatch:
         self.variables = variables
 
 
-    def simulate(self, *theta, variables_i=None):
+    def simulate(self, theta, variables_i=None):
         if self.simulator is None:
             raise NotImplementedError("Simulator not defined.")
         elif self.variables is None:
-            return self.simulator(*theta)
+            return self.simulator(theta)
         else:
-            return self.simulator(*theta, *variables_i)
+            return self.simulator(theta, *variables_i)
 
     def implausibility(self, E, z_i, var_em, var_obs, var_method, var_model):
 
@@ -208,8 +209,9 @@ class HistoryMatch:
 
 
             # evaluate simulator over training points
-            Ztrain = self.simulate(*theta_train.T, variables_i=self.variables[output])
-            
+            Ztrain = self.simulate(theta_train.T, variables_i=self.variables[output])
+            #Ztrain = self.simulate(theta_train[0], variables_i=self.variables[output])
+
             #corr_length = self.nonimplausible_bounds[:,1]- self.nonimplausible_bounds[:,0]
             corr_length = 5
             
@@ -220,11 +222,11 @@ class HistoryMatch:
 
             #print('Emulating output {}...'.format(output))
 
-            #mu = self.simulate(*theta_samples.T, variables_i=self.variables[output])
+            mu = self.simulate(theta_samples.T, variables_i=self.variables[output])
 
-            #sd = np.zeros(len(mu))
+            sd = np.zeros(len(mu))
             
-            mu, sd = GP.emulate(theta_samples)
+            #mu, sd = GP.emulate(theta_samples)
 
 
             if np.mean(sd) + 3*np.sqrt(np.var(sd)) < self.sigma_model[output]:
@@ -311,7 +313,9 @@ class HistoryMatch:
             # run history matching wave
             self.nonimplausible_bounds, nonimplausible_samples, I_samples, mu, sd, output_convergence,\
                                         = self.wave(theta_train, theta_samples)
-
+            self.wavecount += 1
+            if self.wavecount > 4:
+                self.ndim = 6
 
             if wave+1 < len(self.noutputs_list):
                 self.noutputs = self.noutputs_list[wave+1]
