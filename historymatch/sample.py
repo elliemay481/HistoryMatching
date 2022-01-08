@@ -1,132 +1,343 @@
+# external imports
 import numpy as np
 from pyDOE import lhs
 from scipy.stats import norm
+
+# internal imports
 from historymatch import utils
 
-def LHsampling(ndim, Ntraining, limits):
+
+
+def LHsampling(ndim, Nsamples, limits):
     
     '''
-    Args:
-    ndim : Number of dimensions
-    Ntraining : Number of training points
-    Limits: (n x d) array of upper and lower boundaries of parameter region
-    
-    Returns: (d x M) array of training points
+    Generate well spaced samples using Latin Hypercube sampling.
+
+    Args
+    ---
+
+    ndim : int
+        Number of dimensions
+
+    Nsamples : int
+        Number of samples to generate.
+
+    limits : ndarray, shape (ndim, 2)
+        Array of upper and lower boundaries to generate samples between.
+
+    Returns
+    -------
+
+    samples : ndarray, shape (Nsamples, ndim)
+        Latin hypercube samples.
     
     '''
     
     # generate sample points
-    input_train = lhs(ndim, samples=Ntraining, criterion='center')
+    samples = lhs(ndim, samples=Nsamples, criterion='center')
     # adjust sample points for parameter ranges
-    for i in range(ndim):
-        input_train[:,i] = input_train[:,i]*(limits[i,1]-limits[i,0]) + limits[i,0]
+    if ndim == 1:
+        samples = samples*(limits[1]-limits[0]) + limits[0]
+    else:
+        for i in range(ndim):
+            samples[:,i] = samples[:,i]*(limits[i,1]-limits[i,0]) + limits[i,0]
 
-    
-    return input_train
-
-
-def grid_sample(ndim, Nsamples, limits):
-
-    n = int(round(np.cbrt(Nsamples)))
-
-    a = np.linspace(limits[0,0],limits[0,1],n)
-    b = np.linspace(limits[1,0],limits[1,1],n)
-    c = np.linspace(limits[2,0],limits[2,1],n)
-
-    d = np.array(np.meshgrid(a, b, c)).T.reshape(-1,3)
-
-    return d
+    return samples
 
 
 
 
-def hypercube_sample(ndim, Nsamples, Ntraining, limits):
+def hypercube_sample(ndim, Nsamples, Ntraining, nonimplausible_samples=None, inactive=False, parameter_bounds=None):
 
     '''
-    Args:
-    ndim : Number of dimensions
-    Ntraining : Number of training points
-    Nsamples : Number of points along parameter space axes
-    Limits: (n x d) array of upper and lower boundaries of parameter region
-    
-    Returns:
-        (Ntraining x ndim) array of training points
-        (Nsamples x ndim) array of well spaced samples in parameter space
+    Args
+    ---
+
+    ndim : int
+        Number of dimensions
+
+    Ntraining : int
+        Number of training points to generate.
+
+    Nsamples : int
+        Total number of samples to generate.
+
+    bounds : ndarray, shape (2, ndim)
+        Array of upper and lower boundaries of each input parameter.
+
+    Returns
+    -------
+
+    parameter_train : ndarray, shape (Ntraining, ndim)
+        Input parameters used within simulator to generate outputs for emulator training.
+
+    parameter_samples : ndarray, shape (Nsamples, ndim)
+        Well spaced samples in parameter space.
     
     '''
+
+    # wave 1
+    if type(nonimplausible_samples) is not np.ndarray:
+        bounds = parameter_bounds
+    else:
+        if inactive == True:
+            bounds = utils.locate_boundaries(nonimplausible_samples, ndim-1)
+        else:
+            bounds = utils.locate_boundaries(nonimplausible_samples, ndim)
+
+    if inactive == True:
+        extended_bounds = np.concatenate((bounds, parameter_bounds[-1].reshape(1,-1)),axis=0)
+        bounds = extended_bounds
+
 
     # generate sample points on Latin Hypercube
-    input_test = LHsampling(ndim, Nsamples, limits)
-    input_train = LHsampling(ndim, Ntraining, limits)
+    parameter_samples = LHsampling(ndim, Nsamples, bounds)
+    parameter_train = LHsampling(ndim, Ntraining, bounds)
 
-    print(input_train.shape)
-
-    return input_train, input_test
+    return parameter_train, parameter_samples
 
 
-def ellipsoid_sample(ndim, Nsamples, Ntraining, mean, covariance):
+
+
+def gaussian_sample(ndim, Nsamples, Ntraining, nonimplausible_samples, inactive=False, parameter_bounds=None):
 
     '''
-    Args:
-    ndim : Number of dimensions
-    Nsamples : Number of points along parameter space axes
-    Ntraining : Number of training points
-    mean : ndim length array of mean parameter values
-    covariance : (ndim x ndim) array
-    
-    Returns:
-        (Ntraining x ndim) array of training points
-        (Nsamples x ndim) array of well spaced samples in parameter space
+    Generate well-spaced samples distributed according to a multivariate normal distribution.
+
+    Args
+    ---
+
+    ndim : int
+        Number of dimensions
+
+    Ntraining : int
+        Number of training points to generate.
+
+    Nsamples : int
+        Total number of samples to generate.
+
+    mean : ndarray, shape (ndim,)
+        Mean of normal distribution.
+
+    covariance : ndarray, shape (ndim, ndim)
+        Covariance matrix of distribution.
+
+    Returns
+    -------
+
+    parameter_train : ndarray, shape (Ntraining, ndim)
+        Input parameters used within simulator to generate outputs for emulator training.
+
+    parameter_samples : ndarray, shape (Nsamples, ndim)
+        Well spaced samples in parameter space.
     
     '''
+
+    # compute mean and covariance of non-implausible samples
+    covariance = np.cov(nonimplausible_samples.T)
+    mean = np.mean(nonimplausible_samples, axis=0)
+
     # generate sample points
-    u_train = lhs(ndim, samples=Ntraining, criterion='center')
-    u_test = lhs(ndim, samples=Nsamples, criterion='center')
+    uniform_train = lhs(ndim, samples=Ntraining, criterion='center')
+    uniform_samples = lhs(ndim, samples=Nsamples, criterion='center')
+
+    if inactive == True:
+        ndim -= 1
 
     # normally distribute sample points
     for i in range(ndim):
-        u_train[:,i] = norm(loc=0, scale=1).ppf(u_train[:,i])
-        u_test[:,i] = norm(loc=0, scale=1).ppf(u_test[:,i])
+        uniform_train[:,i] = norm(loc=0, scale=1).ppf(uniform_train[:,i])
+        uniform_samples[:,i] = norm(loc=0, scale=1).ppf(uniform_samples[:,i])
     
     # Add pertubation to covariance
     epsilon = 1e-9
     K = covariance + epsilon*np.identity(ndim)
 
-    # Calculate the Cholesky decomposition
+    # Compute the Cholesky decomposition
     L = np.linalg.cholesky(K)
 
+
+    print(uniform_train.shape)
+
     # Compute multivariate gaussian distributed samples
-    input_train = mean.reshape(ndim, 1) + np.dot(L, u_train.reshape(ndim, Ntraining))
-    input_test = mean.reshape(ndim, 1) + np.dot(L, u_test.reshape(ndim, Nsamples))
+    input_train = mean.reshape(ndim, 1) + np.dot(L, uniform_train[:,:ndim].reshape(ndim, Ntraining))
+    parameter_samples = mean.reshape(ndim, 1) + np.dot(L, uniform_samples[:,:ndim].reshape(ndim, Nsamples))
 
-    return input_train.T, input_test.T
+    if inactive == True:
+        uniform_train[:,-1] = uniform_train[:,-1]*(parameter_bounds[-1,1]-parameter_bounds[-1,0]) + parameter_bounds[-1,0]
+        uniform_samples[:,-1] = uniform_samples[:,-1]*(parameter_bounds[-1,1]-parameter_bounds[-1,0]) + parameter_bounds[-1,0]
+        input_train_inac = np.concatenate((input_train.T, uniform_train[:,-1].reshape(-1,1)),axis=1)
+        parameter_samples_inac = np.concatenate((parameter_samples.T, uniform_samples[:,-1].reshape(-1,1)),axis=1)
+        return input_train_inac, parameter_samples_inac
+
+    return input_train.T, parameter_samples.T
 
 
-def rotated_hypercube_samples(ndim, nonimp_vol, Nsamples, Ntraining):
 
-    # ********* unfinished **********
-    eigvals, eigvecs = np.linalg.eig(np.cov(nonimp_vol.T))
-    R = np.concatenate((eigvecs[0].reshape(-1,1),eigvecs[1].reshape(-1,1),eigvecs[2].reshape(-1,1),eigvecs[3].reshape(-1,1),eigvecs[4].reshape(-1,1),eigvecs[5].reshape(-1,1)),axis=1)
 
-    nonimp_str = nonimp_vol.dot(np.linalg.inv(R))
+def uniform_ellipsoid_sample(ndim, Nsamples, Ntraining, nonimplausible_samples, inactive=False, parameter_bounds=None):
 
-    #bounds = utils.locate_boundaries(nonimp_str, ndim)
-    bounds = utils.locate_boundaries(nonimp_vol, ndim)
+    '''
+    Generate well-spaced samples distributed according to a multivariate normal distribution.
 
-    #print('x :' + str(bounds[0,1]-bounds[0,0]))
-    #print('y :' + str(bounds[1,1]-bounds[1,0]))
-    #print('z :' + str(bounds[2,1]-bounds[2,0]))
+    Args
+    ---
 
-    samples_test = LHsampling(ndim, Nsamples, bounds)
-    samples_train = LHsampling(ndim, Ntraining, bounds)
+    ndim : int
+        Number of dimensions
 
-    input_test = np.zeros((len(samples_test),ndim))
-    input_train = np.zeros((len(samples_train),ndim))
+    Ntraining : int
+        Number of training points to generate.
 
-    for i in range(len(samples_test)):
-        input_test[i] = samples_test[i].dot(R)
+    Nsamples : int
+        Total number of samples to generate.
 
-    for i in range(len(samples_train)):
-        input_train[i] = samples_train[i].dot(R)
+    mean : ndarray, shape (ndim,)
+        Mean of normal distribution.
 
-    return input_train, input_test
+    covariance : ndarray, shape (ndim, ndim)
+        Covariance matrix of distribution.
+
+    Returns
+    -------
+
+    parameter_train : ndarray, shape (Ntraining, ndim)
+        Input parameters used within simulator to generate outputs for emulator training.
+
+    parameter_samples : ndarray, shape (Nsamples, ndim)
+        Well spaced samples in parameter space.
+    
+    '''
+
+    # compute mean and covariance of non-implausible samples
+    covariance = np.cov(nonimplausible_samples.T)
+
+    mean = np.mean(nonimplausible_samples, axis=0)
+
+    # generate sample points
+    uniform_train = lhs(ndim, samples=Ntraining, criterion='center')
+    uniform_samples = lhs(ndim, samples=Nsamples, criterion='center')
+
+    if inactive == True:
+        ndim -= 1
+
+    # normally distribute sample points
+    normal_train = np.zeros_like(uniform_train)
+    normal_samples = np.zeros_like(uniform_samples)
+    for i in range(ndim):
+        normal_train[:,i] = norm(loc=0, scale=1).ppf(uniform_train[:,i])
+        normal_samples[:,i] = norm(loc=0, scale=1).ppf(uniform_samples[:,i])
+    
+    # compute norm and divide by
+    train_norm = np.linalg.norm(normal_train[:,:ndim], axis=1)
+    sample_norm = np.linalg.norm(normal_samples[:,:ndim], axis=1)
+
+    uniform_ell_train = np.zeros_like(normal_train[:,:ndim])
+    uniform_ell_samples = np.zeros_like(normal_samples[:,:ndim])
+    for i in range(ndim):
+        uniform_ell_train[:,i] = normal_train[:,i]/train_norm
+        uniform_ell_samples[:,i] = normal_samples[:,i]/sample_norm
+
+    # radially distribute samples
+    r_train = lhs(ndim, samples=Ntraining, criterion='center')
+    r_samp = lhs(ndim, samples=Nsamples, criterion='center')
+
+    uniform_ell_train *= r_train**(1.0/ndim)
+    uniform_ell_samples *= r_samp**(1.0/ndim)
+
+    # Add pertubation to covariance
+    epsilon = 1e-9
+    K = covariance + epsilon*np.identity(ndim)
+
+    # Compute the Cholesky decomposition
+    L = np.linalg.cholesky(K)
+
+    # correlate samples
+    ell_train = np.dot(L, uniform_ell_train.T)
+    ell_samples = np.dot(L, uniform_ell_samples.T)
+
+    # recentre and resize to 95% C.I.
+    chisq = [3.841,5.991,7.815,9.488,11.070,12.592,14.067,15.507]    # 95% C.I. chisq values
+    input_train = mean.reshape(ndim, 1) + np.sqrt(chisq[ndim-1])*ell_train
+    parameter_samples = mean.reshape(ndim, 1) + np.sqrt(chisq[ndim-1])*ell_samples
+    
+    if inactive == True:
+        uniform_train[:,-1] = uniform_train[:,-1]*(parameter_bounds[-1,1]-parameter_bounds[-1,0]) + parameter_bounds[-1,0]
+        uniform_samples[:,-1] = uniform_samples[:,-1]*(parameter_bounds[-1,1]-parameter_bounds[-1,0]) + parameter_bounds[-1,0]
+        input_train_inac = np.concatenate((input_train.T, uniform_train[:,-1].reshape(-1,1)),axis=1)
+        parameter_samples_inac = np.concatenate((parameter_samples.T, uniform_samples[:,-1].reshape(-1,1)),axis=1)
+        return input_train_inac, parameter_samples_inac
+
+    return input_train.T, parameter_samples.T
+
+
+
+
+def rotated_hypercube_sample(ndim, Nsamples, Ntraining, nonimplausible_samples, parameter_bounds=None, inactive=False):
+    '''
+    Generate well-spaced samples using Latin Hypercube sampling and rotate to correspond to non-implausible volume.
+
+    Args
+    ---
+
+    ndim : int
+        Number of dimensions
+
+    Ntraining : int
+        Number of training points to generate.
+
+    Nsamples : int
+        Total number of samples to generate.
+
+    nonimplausible_samples : ndarray, shape (N, ndim)
+        Array of N (non-implausible) samples.
+
+    Returns
+    -------
+
+    parameter_train : ndarray, shape (Ntraining, ndim)
+        Input parameters used within simulator to generate outputs for emulator training.
+
+    parameter_samples : ndarray, shape (Nsamples, ndim)
+        Well spaced samples in parameter space.
+    
+    '''
+
+    # compute transformation matrices from nonimplausible samples
+    covariance = np.cov(nonimplausible_samples.T)
+    mean = np.mean(nonimplausible_samples, axis=0)
+
+    _eigvals, eigvecs = np.linalg.eig(covariance)
+    R = eigvecs.T                            # rotation matrix
+    S = 2*np.eye(ndim)*np.sqrt(_eigvals)     # scaling matrix
+    T = np.dot(S, np.linalg.inv(R))          # tranformation matrix
+
+    # generate well spaced samples centred on 0
+    bounds = np.concatenate((-np.ones(ndim).reshape(-1,1), np.ones(ndim).reshape(-1,1)), axis=1)
+    uniform_train = LHsampling(ndim, Ntraining, bounds)
+    uniform_samples = LHsampling(ndim, Nsamples, bounds)
+
+    if inactive == True:
+        ndim -= 1
+
+    # rotate and scale samples
+    parameter_train = np.zeros((len(uniform_train),ndim))
+    parameter_samples = np.zeros((len(uniform_samples),ndim))
+    for i in range(len(uniform_train)):
+        parameter_train[i] = np.dot(np.linalg.inv(R), np.dot(S, uniform_train[i,:ndim]))
+    for i in range(len(uniform_samples)):
+        parameter_samples[i] = np.dot(np.linalg.inv(R), np.dot(S, uniform_samples[i,:ndim]))
+
+    # recentre samples
+    for dim in range(ndim):
+        parameter_samples[:,dim] += mean[dim]
+
+    # if inactive parameter introduced, append well spaced samples
+    if inactive == True:
+        uniform_train[:,-1] = 0.5*(uniform_train[:,-1]+1)*(parameter_bounds[-1,1]-parameter_bounds[-1,0]) + parameter_bounds[-1,0]
+        uniform_samples[:,-1] = 0.5*(uniform_samples[:,-1]+1)*(parameter_bounds[-1,1]-parameter_bounds[-1,0]) + parameter_bounds[-1,0]
+        input_train_inac = np.concatenate((input_train.T, uniform_train[:,-1].reshape(-1,1)),axis=1)
+        parameter_samples_inac = np.concatenate((parameter_samples.T, uniform_samples[:,-1].reshape(-1,1)),axis=1)
+        return input_train_inac, parameter_samples_inac
+
+    return parameter_train, parameter_samples

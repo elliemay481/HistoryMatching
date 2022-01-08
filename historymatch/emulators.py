@@ -1,9 +1,6 @@
-
 from abc import ABC, abstractmethod
 import numpy as np
 from math import factorial
-from scipy.optimize import minimize
-from numpy.linalg import cholesky, det, inv
 import GPy
 
 

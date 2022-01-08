@@ -1,11 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib import colors
 from matplotlib import cm
-from scipy import stats
-from scipy.stats import norm, uniform
-import scipy.optimize
-
+from scipy.optimize import curve_fit
+import seaborn as sns
+from scipy.stats import norm
 
 def plot_implausibility2D(samples, parameter_bounds, parameters, bins=20, Fig=None, colorbar=False, 
                             labels=None, plot_kwargs=None):
@@ -16,18 +14,18 @@ def plot_implausibility2D(samples, parameter_bounds, parameters, bins=20, Fig=No
     Args
     ----
 
-    samples : array of floats
-        (nsamples x ndim+1) size array of nsamples coordinates in parameter space and
-        each coordinate's corresponding implausibility. An array of samples for each wave
+    samples : ndarray, shape (N, ndim+1)
+        N sample coordinates in parameter space and
+        each samples's corresponding implausibility. An array of samples for each wave
         is an attribute of the output of HistoryMatch.run(). The samples for each wave
         can be accessed by indexing the array of samples.
 
-    parameter_bounds : array of floats
-        (ndim x 2) array containing the initial upper and lower bounds assigned to 
+    parameter_bounds : ndarray, shaPE (ndim, 2)
+        array containing the initial upper and lower bounds assigned to 
         each parameter to be plotted.
 
-    parameters : array of ints
-        If ndim > 2, a (1 x 2) array of the parameters to plot is required. The two
+    parameters : ndarray of ints, shape (1, 2)
+        If ndim > 2, an array of the parameters to plot is required. The two
         values in the array are integers corresponding to parameters, following the
         same order as parameter_bounds. The first variable in the array will be plotted
         on the x-axis and the second variable on the y-axis.
@@ -48,7 +46,6 @@ def plot_implausibility2D(samples, parameter_bounds, parameters, bins=20, Fig=No
 
     """
 
-    print('implaus2D')
     if Fig == None:
         fig, ax = plt.subplots()
     else:
@@ -112,10 +109,10 @@ def plot_implausibility2D(samples, parameter_bounds, parameters, bins=20, Fig=No
     if labels:
         ax.set_xlabel(labels[parameters[0]])
         ax.set_ylabel(labels[parameters[1]])
-    #cbar = fig.colorbar(im, ax=ax)
-    #cbar.set_label('Implausibility')
-    #if colorbar == False:
-        #cbar.remove()
+    cbar = fig.colorbar(im, ax=ax)
+    cbar.set_label('Implausibility')
+    if colorbar == False:
+        cbar.remove()
     #ax.set_title('Wave ' + str(wave+1) + ' Implausibility')
 
     
@@ -129,18 +126,18 @@ def opticaldepth_2D(samples, parameter_bounds, parameters, bins=20, Fig=None, co
     Args
     ----
 
-    samples : array of floats
-        (nsamples x ndim+1) size array of nsamples coordinates in parameter space and
-        each coordinates corresponding implausibility. An array of samples for each wave
+    samples : ndarray, shape (N, ndim+1)
+        N sample coordinates in parameter space and
+        each sample's corresponding implausibility. An array of samples for each wave
         is an attribute of the output of HistoryMatch.run(). The samples for each wave
         can be accessed by indexing the array of samples.
 
-    parameter_bounds : array of floats
-        (ndim x 2) array containing the initial upper and lower bounds assigned to 
+    parameter_bounds : ndarray, shape (ndim, 2)
+        Array containing the initial upper and lower bounds assigned to 
         each parameter to be plotted.
 
-    parameters : array of ints
-        If ndim > 2, a (1 x 2) array of the parameters to plot is required. The two
+    parameters : array of ints, shape (1, 2)
+        If ndim > 2, an array of the parameters to plot is required. The two
         values in the array are integers corresponding to parameters, following the
         same order as parameter_bounds. The first variable in the array will be plotted
         on the x-axis and the second variable on the y-axis.
@@ -161,7 +158,6 @@ def opticaldepth_2D(samples, parameter_bounds, parameters, bins=20, Fig=None, co
 
     """
 
-    print('opt2D')
     if Fig == None:
         fig, ax = plt.subplots()
     else:
@@ -206,12 +202,12 @@ def opticaldepth_2D(samples, parameter_bounds, parameters, bins=20, Fig=None, co
 
     
     #bounds=np.linspace(np.amin(densities), np.amax(densities), 8)
-    clevels = [0,0.05,0.1,0.2,0.3,0.4,0.5,0.6]
+    clevels = [0,0.01,0.1,0.2,0.3,0.4,0.5,0.6]
 
     if plot_kwargs is None:
         plot_kwargs = dict()
     
-    plot_kwargs['cmap'] = plot_kwargs.get('cmap', 'magma')
+    plot_kwargs['cmap'] = plot_kwargs.get('cmap', 'afmhot_r')
 
     cmap = cm.get_cmap(plot_kwargs.get('cmap'))
 
@@ -233,19 +229,19 @@ def plotcorner(samples, parameter_bounds, ndim, bins=20, Fig=None, colorbar=Fals
                 show_axes = 'all', labels=None, plot1D_kwargs=None, plot2D_kwargs=None):
 
     """
-    Plots a corner plot of 2-d implausibility plots for all parameters,
-    for a particular wave.
+    Plots a corner plot of 2-d implausibility plots given sample coordinates and a corresponding
+    implausibility for each sample.
 
     Args
     ----
-    samples : array of floats
-        (nsamples x ndim+1) size array of nsamples coordinates in parameter space and
+    samples : ndarray, shape (nsamples, ndim+1)
+        Array of nsamples coordinates in parameter space and
         each coordinates corresponding implausibility. An array of samples for each wave
         is an attribute of the output of HistoryMatch.run(). The samples for each wave
         can be accessed by indexing the array of samples.jh
 
-    parameter_bounds : array of floats
-        (ndim x 2) array containing the initial upper and lower bounds assigned to 
+    parameter_bounds : ndarray, shape (ndim, 2)
+        Array containing the initial upper and lower bounds assigned to 
         each parameter to be plotted.
 
     bins : int, optional
@@ -308,7 +304,7 @@ def plotcorner(samples, parameter_bounds, ndim, bins=20, Fig=None, colorbar=Fals
 
 
 
-def opticaldepth_1D(samples, parameter_bounds, parameter, bins=20, Fig=None, label=None, plot_kwargs=None):
+def opticaldepth_1D(samples, parameter_bounds, parameter, bins=20, normalize=False, Fig=None, label=None, plot_kwargs=None):
 
     """
     Plots the optical depth for a single parameter, for a specified wave.
@@ -316,14 +312,14 @@ def opticaldepth_1D(samples, parameter_bounds, parameter, bins=20, Fig=None, lab
     Args
     ----
 
-    samples : array of floats
-        (nsamples x ndim+1) size array of nsamples coordinates in parameter space and
+    samples : ndarray, shape (nsamples, ndim+1)
+        Array of nsamples coordinates in parameter space and
         each coordinates corresponding implausibility. An array of samples for each wave
         is an attribute of the output of HistoryMatch.run(). The samples for each wave
         can be accessed by indexing the array of samples.
 
-    parameter_bounds : array of floats
-        (1 x 2) array containing the initial upper and lower bounds assigned to 
+    parameter_bounds : ndarray, shape (1,2)
+        Array containing the initial upper and lower bounds assigned to 
         the parameter to be plotted.
 
     parameter : int
@@ -344,13 +340,10 @@ def opticaldepth_1D(samples, parameter_bounds, parameter, bins=20, Fig=None, lab
         Additional keyword arguments passed to 'axes.bar'.
     
     """
-    print('opt1D')
     if Fig == None:
         fig = plt.figure()
     else:
         fig, ax = Fig
-
-    
 
     # split axis into bins
     xmin = parameter_bounds[0]
@@ -367,52 +360,52 @@ def opticaldepth_1D(samples, parameter_bounds, parameter, bins=20, Fig=None, lab
         # find values within bin
         indices = np.where(np.logical_and(samples[:,parameter]>=bin_min, samples[:,parameter]<bin_max))
         # find initial density in this bin
-        density_0 = len(indices)
+        density_0 = len(indices[0])
         # for each bin, count nonimplausible values over remaining parameter volume
         bin_count = np.count_nonzero(samples[indices,-1] < 3, axis=1)
         if density_0 != 0:
             counts.append(bin_count[0]/density_0)
         else:
-            counts.append(np.NanN)
+            counts.append(0)
 
     if plot_kwargs is None:
         plot_kwargs = dict()
 
     plot_kwargs['width'] = plot_kwargs.get('width', bin_size)
     plot_kwargs['align'] = plot_kwargs.get('align', 'edge')
+    plot_kwargs['label'] = plot_kwargs.get('label')
 
     ax.bar(np.arange(xmin, xmax, bin_size), counts, **plot_kwargs)
 
     if label:
         ax.set_xlabel(label)
+    if plot_kwargs.get('label'):
+        ax.legend(loc='best')
 
 
-def get_cov_ellipse(cov, centre, nstd, chi, ax, color):
+def get_cov_ellipse(cov, centre, nstd, chi, ax, color, linestyle, lw=3):
     """
-    Return a matplotlib Ellipse patch representing the covariance matrix
-    cov centred at centre and scaled by the factor nstd.
+    Plot an isoprobaility-contour ellipse given a mean (centre) and
+    2D covariance matrix.
 
     """
 
-    # Find and sort eigenvalues and eigenvectors into descending order
+    # Find and sort eigenvalues and eigenvectors
     eigvals, eigvecs = np.linalg.eigh(cov)
     order = eigvals.argsort()[::-1]
     eigvals, eigvecs = eigvals[order], eigvecs[:, order]
 
     # The anti-clockwise angle to rotate our ellipse by 
-    vx, vy = eigvecs[:,0][0], eigvecs[:,0][1]
-    theta = np.arctan2(vy, vx)
+    theta = np.arctan2(eigvecs[:,0][1], eigvecs[:,0][0])
 
-    # Width and height of ellipse to draw
+    # Width and height of ellipse
     width, height = 2 * np.sqrt(chi*np.abs(eigvals))
     
-    
-    
     t = np.linspace(0, 2*np.pi, 100)
-    Ell = np.array([0.5*width*np.cos(t) , 0.5*height*np.sin(t)]) 
-    R_rot = np.array([[np.cos(theta) , -np.sin(theta)],[np.sin(theta), np.cos(theta)]])  
-    Ell_rot = np.zeros((2,Ell.shape[1]))
-    for i in range(Ell.shape[1]):
-        Ell_rot[:,i] = np.dot(R_rot,Ell[:,i])
+    ellipse = np.array([0.5*width*np.cos(t) , 0.5*height*np.sin(t)]) 
+    R = np.array([[np.cos(theta) , -np.sin(theta)],[np.sin(theta), np.cos(theta)]])  # rotation matrix
+    ellipse_rot = np.zeros((2,ellipse.shape[1]))
+    for i in range(ellipse.shape[1]):
+        ellipse_rot[:,i] = np.dot(R,ellipse[:,i])
 
-    ax.plot( centre[0]+Ell_rot[0,:] , centre[1]+Ell_rot[1,:], linewidth='3', color=color)
+    ax.plot( centre[0]+ellipse_rot[0,:] , centre[1]+ellipse_rot[1,:], linewidth=lw, color=color, linestyle=linestyle)
