@@ -371,16 +371,17 @@ def opticaldepth_1D(samples, parameter_bounds, parameter, bins=20, normalize=Fal
     if plot_kwargs is None:
         plot_kwargs = dict()
 
-    plot_kwargs['width'] = plot_kwargs.get('width', bin_size)
-    plot_kwargs['align'] = plot_kwargs.get('align', 'edge')
+    #plot_kwargs['width'] = plot_kwargs.get('width', bin_size)
+    #plot_kwargs['align'] = plot_kwargs.get('align', 'edge')
+    plot_kwargs['where'] = plot_kwargs.get('where', 'mid')
     plot_kwargs['label'] = plot_kwargs.get('label')
 
-    ax.bar(np.arange(xmin, xmax, bin_size), counts, **plot_kwargs)
+    ax.step(np.arange(xmin, xmax, bin_size), counts, **plot_kwargs)
 
     if label:
         ax.set_xlabel(label)
     if plot_kwargs.get('label'):
-        ax.legend(loc='best')
+        ax.legend(loc='upper right')
 
 
 def get_cov_ellipse(cov, centre, nstd, chi, ax, color, linestyle, lw=3):

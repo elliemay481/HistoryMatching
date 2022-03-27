@@ -23,11 +23,14 @@ class Results(object):
 
         self.filename = filename
 
-        results_dict = {'wave': [], 'nonimplausible': [], 'samples_I': []}
+        results_dict = {'wave': [], 'nonimplausible': [], 'samples_I': [], 'emulator_mu': [], 'emulator_sd': [], 'parameter_train1': []}
         self.results_dict = results_dict
         self.wave = self.results_dict['wave']
         self.nonimplausible = self.results_dict['nonimplausible']
         self.samples_I = self.results_dict['samples_I']
+        self.emulator_mu = self.results_dict['emulator_mu']
+        self.emulator_sd = self.results_dict['emulator_sd']
+        self.parameter_train1 = self.results_dict['parameter_train1']
 
     def __getattribute__(self, name):
         """ Returns attribute of history matching results."""
@@ -236,6 +239,7 @@ class HistoryMatch:
                             sample.hypercube_sample(self.ndim, nsamples, ntraining, nonimplausible_samples)
 
         elif self.shape == 'gaussian':
+            print('yes')
             if self.inactive == True and wave == self.inactive_wave:
                 self.ndim += self.ninactive
                 parameter_train, parameter_samples = \
@@ -257,6 +261,7 @@ class HistoryMatch:
 
         elif self.shape == 'hypercube_rot':
             if self.inactive == True and wave == self.inactive_wave:
+                self.ndim += self.ninactive
                 parameter_train, parameter_samples = \
                             sample.rotated_hypercube_sample(self.ndim, nsamples, ntraining, nonimplausible_samples, \
                                                             self.parameter_bounds, inactive=True)
@@ -302,6 +307,7 @@ class HistoryMatch:
             nonimplausible_samples = self.results.get_nonimplausible(wave-1)
             parameter_train, parameter_samples = self.generate_samples(nonimplausible_samples[:,:-1], nsamples, ntraining, wave)
 
+
         training_pts.append(parameter_train)
         
         noutputs = len(observational_data)
@@ -322,7 +328,7 @@ class HistoryMatch:
                     "Must specify number of training points if using emulator."
                 # train emulator
                 if self.emulator_choice == 'GP':
-                    GP = emulators.GaussianProcess(parameter_train, Ztrain, length_scale=1, signal_sd=100, bayes_linear = True, noise_sd = 1e-9)
+                    GP = emulators.GaussianProcess(parameter_train, Ztrain, length_scale=10, signal_sd=100, bayes_linear = True, noise_sd = 1e-9)
                 elif self.emulator_choice == 'EC':
                     print('EC not yet developed')
                 # emulate outputs over sample space
@@ -345,6 +351,26 @@ class HistoryMatch:
                 implausibilities_all[i, output] = self.implausibility(mu[i], observational_data[output], sd[i]**2, sigma_observational[output]**2,\
                                                                             sigma_method[output]**2, sigma_model[output]**2, sigma_inactive**2)
 
+            if output == 0:
+                GP = emulators.GaussianProcess(parameter_train, Ztrain, length_scale=10, signal_sd=100, bayes_linear = True, noise_sd = 1e-9)
+                if wave == 1:
+                    uniform_samples = np.zeros((100,4))
+                    for i in range(4):
+                        uniform_samples[:,i] = np.linspace(self.parameter_bounds[i,0], self.parameter_bounds[i,1], 100)
+                    uniform_mu, uniform_sd = GP.emulate(uniform_samples)
+                    emulator_mu = uniform_mu
+                    emulator_sd = uniform_sd
+                    parameter_train1 = parameter_train
+                elif wave == 2:
+                    bounds = utils.locate_boundaries(nonimplausible_samples[:,:-1], 4)
+                    uniform_samples = np.zeros((100,4))
+                    for i in range(4):
+                        uniform_samples[:,i] = np.linspace(self.parameter_bounds[i,0], self.parameter_bounds[i,1], 100)
+                    uniform_mu, uniform_sd = GP.emulate(uniform_samples)
+                    emulator_mu = uniform_mu
+                    emulator_sd = uniform_sd
+                    parameter_train1 = parameter_train
+
 
         # get index of second highest maximum implaus for all outputs
         max_implausibilities = implausibilities_all[range(len(parameter_samples)), implausibilities_all.argsort()[:,-Imax]]
@@ -354,7 +380,7 @@ class HistoryMatch:
 
         print('Number of Non-Implausible Samples: ' + str(nonimplausible_samples.shape[0]))
 
-        return nonimplausible_samples, samples_I
+        return nonimplausible_samples, samples_I, emulator_mu, emulator_sd, parameter_train1
 
 
 
@@ -378,7 +404,7 @@ class HistoryMatch:
 
         self.nwaves = nwaves
 
-        for wave in np.arange(1,self.nwaves,1):
+        for wave in np.arange(1,self.nwaves+1,1):
             print('Running wave ' + str(wave))
 
             # select data for wave
@@ -389,26 +415,25 @@ class HistoryMatch:
             wave_variables = self.variables[wave-1]
 
 
-            nonimplausible_samples, samples_I = \
+            nonimplausible_samples, samples_I, emulator_mu, emulator_sd, parameter_train1 = \
                             self.run_wave(wave, observational_data, sigma_observational,\
-                                             sigma_model, sigma_method, wave_variables, nsamples, ntraining=None, emulate=emulate)
-            self.store_result(Result, wave, (nonimplausible_samples, samples_I))
+                                             sigma_model, sigma_method, wave_variables, nsamples, ntraining=ntraining, emulate=emulate)
+            self.store_result(Result, wave, (nonimplausible_samples, samples_I, emulator_mu, emulator_sd, parameter_train1))
             
             # check for empty non-implausible volume
             if nonimplausible_samples.shape[0] == 0:
                 end_str_empty = 'Nonimplausible volume empty. Terminated after ' + str(wave) + ' waves.'
                 print(end_str_empty)
-                return results_dict
+                return None
             # check for emulator variance lower than other variances
             elif np.all(self.output_convergence) == True and emulate == True:
                 end_str_conv = 'Convergence reached after ' + str(wave) + ' waves.'
                 print(end_str_conv)
-                return results_dict
+                #return None
 
         return self.results
 
     def store_result(self, result_obj, wave, wave_results):
-
         
         # check for duplicate and overwrite
         if wave in result_obj.results_dict['wave']:
@@ -423,6 +448,10 @@ class HistoryMatch:
             result_obj.results_dict['wave'].append(wave)
             result_obj.results_dict['nonimplausible'].append(wave_results[0])
             result_obj.results_dict['samples_I'].append(wave_results[1])
+
+        result_obj.results_dict['emulator_mu'].append(wave_results[2])
+        result_obj.results_dict['emulator_sd'].append(wave_results[3])
+        result_obj.results_dict['parameter_train1'].append(wave_results[4])
 
         result_obj.save_to_file()
         # store for access in later waves

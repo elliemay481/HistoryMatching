@@ -49,21 +49,20 @@ class GaussianProcess(Emulator):
             self.var_ols = var_ols
             self.train_ols = train_ols
             self.sigma_f = np.sqrt(var_ols)
-            #print(self.sigma_f)
 
         
-        '''
+        
         K_XX = self.kernel(self.input_train, self.input_train, self.sigma_f, self.l) + (self.sigma_noise**2)*np.eye(len(self.input_train))
         K_XX_inv = np.linalg.inv(K_XX)
 
         self.K_XX = K_XX
         self.K_XX_inv = K_XX_inv
-        '''
         
+        '''
         kern = GPy.kern.RBF(input_dim=self.ndim, variance=1., lengthscale=1.)
         m = GPy.models.GPRegression(input_train,output_train.reshape(-1,1),kern)
         m.optimize(messages=False)
-        self.m = m
+        self.m = m'''
 
 
 
@@ -78,7 +77,7 @@ class GaussianProcess(Emulator):
 
         #self.K_XX = K_XX
         #self.K_XX_inv = K_XX_inv
-        '''
+        
         K_XsX = self.kernel(self.input_test, self.input_train, self.sigma_f, self.l)
         K_XXs = self.kernel(self.input_train, self.input_test, self.sigma_f, self.l)
         #K_XsXs = self.kernel(self.input_test, self.input_test, self.sigma_f, self.l)
@@ -93,21 +92,21 @@ class GaussianProcess(Emulator):
             Xd = self.design_matrix(self.input_test)
             mu_ols = np.dot(Xd, self.coeff_ols)
 
+            #mu = self.K_XsX.dot(self.K_XX_inv).dot(self.output_train)
             mu = mu_ols + self.K_XsX.dot(self.K_XX_inv).dot(self.output_train - np.mean(self.output_train))
             #cov = self.sigma_f**2 - self.K_XsX.dot(self.K_XX_inv).dot(self.K_XXs)
             cov_diag = self.sigma_f**2 - np.einsum('ij,ji->i', np.dot(self.K_XsX, self.K_XX_inv), self.K_XXs)
 
             sd = np.sqrt(np.abs(cov_diag))
-            #print(sd)
 
         else:
             mu = self.K_XsX.dot(self.K_XX_inv).dot(self.output_train)
             cov = self.K_XsXs - self.K_XsX.dot(self.K_XX_inv).dot(self.K_XXs)
-            sd = np.sqrt(np.abs(np.diag(cov)))'''
+            sd = np.sqrt(np.abs(np.diag(cov)))
 
         
 
-        mu, sd = self.m.predict(param_samples)
+        #mu, sd = self.m.predict(param_samples)
 
 
 

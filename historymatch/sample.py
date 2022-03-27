@@ -2,6 +2,7 @@
 import numpy as np
 from pyDOE import lhs
 from scipy.stats import norm
+from scipy.stats import chi2
 
 # internal imports
 from historymatch import utils
@@ -157,8 +158,6 @@ def gaussian_sample(ndim, Nsamples, Ntraining, nonimplausible_samples, inactive=
     L = np.linalg.cholesky(K)
 
 
-    print(uniform_train.shape)
-
     # Compute multivariate gaussian distributed samples
     input_train = mean.reshape(ndim, 1) + np.dot(L, uniform_train[:,:ndim].reshape(ndim, Ntraining))
     parameter_samples = mean.reshape(ndim, 1) + np.dot(L, uniform_samples[:,:ndim].reshape(ndim, Nsamples))
@@ -239,8 +238,14 @@ def uniform_ellipsoid_sample(ndim, Nsamples, Ntraining, nonimplausible_samples, 
         uniform_ell_samples[:,i] = normal_samples[:,i]/sample_norm
 
     # radially distribute samples
-    r_train = lhs(ndim, samples=Ntraining, criterion='center')
-    r_samp = lhs(ndim, samples=Nsamples, criterion='center')
+    #r_train = lhs(ndim, samples=Ntraining, criterion='center')
+    #r_samp = lhs(ndim, samples=Nsamples, criterion='center')
+
+    r_samp = np.zeros((Nsamples,ndim))
+    r_train = np.zeros((Ntraining,ndim))
+    for i in range(ndim):
+            r_samp[:,i] = np.linspace(0,1,Nsamples)
+            r_train[:,i] = np.linspace(0,1,Ntraining)
 
     uniform_ell_train *= r_train**(1.0/ndim)
     uniform_ell_samples *= r_samp**(1.0/ndim)
@@ -257,9 +262,9 @@ def uniform_ellipsoid_sample(ndim, Nsamples, Ntraining, nonimplausible_samples, 
     ell_samples = np.dot(L, uniform_ell_samples.T)
 
     # recentre and resize to 95% C.I.
-    chisq = [3.841,5.991,7.815,9.488,11.070,12.592,14.067,15.507]    # 95% C.I. chisq values
-    input_train = mean.reshape(ndim, 1) + np.sqrt(chisq[ndim-1])*ell_train
-    parameter_samples = mean.reshape(ndim, 1) + np.sqrt(chisq[ndim-1])*ell_samples
+    chisq = chi2.ppf(0.95, ndim) # 95% C.I. chisq values
+    input_train = mean.reshape(ndim, 1) + np.sqrt(chisq)*ell_train
+    parameter_samples = mean.reshape(ndim, 1) + np.sqrt(chisq)*ell_samples
     
     if inactive == True:
         uniform_train[:,-1] = uniform_train[:,-1]*(parameter_bounds[-1,1]-parameter_bounds[-1,0]) + parameter_bounds[-1,0]
@@ -302,15 +307,9 @@ def rotated_hypercube_sample(ndim, Nsamples, Ntraining, nonimplausible_samples, 
         Well spaced samples in parameter space.
     
     '''
-
     # compute transformation matrices from nonimplausible samples
     covariance = np.cov(nonimplausible_samples.T)
     mean = np.mean(nonimplausible_samples, axis=0)
-
-    _eigvals, eigvecs = np.linalg.eig(covariance)
-    R = eigvecs.T                            # rotation matrix
-    S = 2*np.eye(ndim)*np.sqrt(_eigvals)     # scaling matrix
-    T = np.dot(S, np.linalg.inv(R))          # tranformation matrix
 
     # generate well spaced samples centred on 0
     bounds = np.concatenate((-np.ones(ndim).reshape(-1,1), np.ones(ndim).reshape(-1,1)), axis=1)
@@ -319,6 +318,15 @@ def rotated_hypercube_sample(ndim, Nsamples, Ntraining, nonimplausible_samples, 
 
     if inactive == True:
         ndim -= 1
+
+    # rescale covariance to obtain correct scaling values
+    chisq = chi2.ppf(0.95, ndim) # 95% C.I. chisq value
+    covariance *= chisq
+
+    _eigvals, eigvecs = np.linalg.eig(covariance)
+    R = eigvecs.T                            # rotation matrix
+    S = np.eye(ndim)*np.sqrt(_eigvals)     # scaling matrix
+    T = np.dot(S, np.linalg.inv(R))          # tranformation matrix
 
     # rotate and scale samples
     parameter_train = np.zeros((len(uniform_train),ndim))
@@ -334,10 +342,12 @@ def rotated_hypercube_sample(ndim, Nsamples, Ntraining, nonimplausible_samples, 
 
     # if inactive parameter introduced, append well spaced samples
     if inactive == True:
+        #print(parameter_train.T.shape)
+        #print(uniform_train[:,-1].reshape(-1,1).shape)
         uniform_train[:,-1] = 0.5*(uniform_train[:,-1]+1)*(parameter_bounds[-1,1]-parameter_bounds[-1,0]) + parameter_bounds[-1,0]
         uniform_samples[:,-1] = 0.5*(uniform_samples[:,-1]+1)*(parameter_bounds[-1,1]-parameter_bounds[-1,0]) + parameter_bounds[-1,0]
-        input_train_inac = np.concatenate((input_train.T, uniform_train[:,-1].reshape(-1,1)),axis=1)
-        parameter_samples_inac = np.concatenate((parameter_samples.T, uniform_samples[:,-1].reshape(-1,1)),axis=1)
-        return input_train_inac, parameter_samples_inac
+        parameter_train_inac = np.concatenate((parameter_train, uniform_train[:,-1].reshape(-1,1)),axis=1)
+        parameter_samples_inac = np.concatenate((parameter_samples, uniform_samples[:,-1].reshape(-1,1)),axis=1)
+        return parameter_train_inac, parameter_samples_inac
 
     return parameter_train, parameter_samples
