@@ -2,6 +2,8 @@
 import numpy as np
 from tqdm import tqdm
 import pickle
+import multiprocessing as mp
+
 
 # internal imports
 from historymatch import emulators
@@ -9,7 +11,7 @@ from historymatch import utils
 from historymatch import sample
 
 class Results(object):
-    """
+    '''
     For accessing the outputs of the history match.
 
     Args
@@ -17,20 +19,17 @@ class Results(object):
     
     filename : str
         Name of pickle file containing results
-    """
+    '''
 
     def __init__(self, filename):
 
         self.filename = filename
 
-        results_dict = {'wave': [], 'nonimplausible': [], 'samples_I': [], 'emulator_mu': [], 'emulator_sd': [], 'parameter_train1': []}
+        results_dict = {'wave': [], 'nonimplausible': [], 'samples_I': []}
         self.results_dict = results_dict
         self.wave = self.results_dict['wave']
         self.nonimplausible = self.results_dict['nonimplausible']
         self.samples_I = self.results_dict['samples_I']
-        self.emulator_mu = self.results_dict['emulator_mu']
-        self.emulator_sd = self.results_dict['emulator_sd']
-        self.parameter_train1 = self.results_dict['parameter_train1']
 
     def __getattribute__(self, name):
         """ Returns attribute of history matching results."""
@@ -50,7 +49,7 @@ class Results(object):
 
 class HistoryMatch:
 
-    """
+    '''
 
     Args
     ----
@@ -58,24 +57,17 @@ class HistoryMatch:
     ndim : int
         Number of unknown parameters.
 
+    filename : str
+        Name of file to store data in
+
     emulator : {'GP', 'EC'}
         Type of emulator used to emulate the model. Choices are Gaussian process
-        ('GP') and eigenvector continuation ('EC').
+        ('GP') and eigenvector continuation ('EC'). (EC not developed currently)
 
     volume_shape : {'hypercube', 'gaussian', 'hypercube_rot', 'ellipsoid'}
         Determines the shape of the nonimplausible parameter volume.
-    
-    nwaves : int, optional
-        Number of history matching waves to complete. If None (default is None)
-        scheme will continue for 20 waves or until termination conditions are met,
-        whichever is sooner. Total number of waves may be less than nwaves if
-        termination conditions reached earlier.
 
-    ntraining : int, optional
-
-    nsamples : int, optional
-
-    """
+    '''
     
     def __init__(self, ndim, filename='result_dict', emulator='GP', volume_shape='hypercube'):
 
@@ -88,9 +80,13 @@ class HistoryMatch:
         self.shape = volume_shape
         volume_types = ['gaussian', 'hypercube', 'hypercube_rot', 'ellipsoid']
         assert volume_shape in volume_types, \
-                        "Invalid volume shape. Must be one of: 'gaussian', 'hypercube', 'hypercube_rot', 'ellipsoid'"
+                        "Invalid volume shape. Must be one of: 'gaussian', 'hypercube', 'hypercube_rot', \
+                        'ellipsoid'"
+
+        self.nprocs = mp.cpu_count()
         
-    def initialize_volume(self, min_parameter, max_parameter, ninactive=None, inactive_wave = None, sigma_inactive = None):
+    def initialize_volume(self, min_parameter, max_parameter, ninactive=None, inactive_wave = None, \
+                            sigma_inactive = None):
 
         '''
         Args
@@ -138,8 +134,8 @@ class HistoryMatch:
         sigma_obs : ndarray, shape (len(obs_data),)
             Standard deviation of the observational uncertainty for each observational datapoint provided.
 
-        sigma_other : float
-            Standard deviation of other uncertainties
+        sigma_inactive : float
+            Standard deviation of uncertainty arising from inactive parameters
         
         '''
         self.sigma_obs = sigma_obs
@@ -161,12 +157,14 @@ class HistoryMatch:
             raise NotImplementedError("Simulator not defined.")
         elif variables_i is None:
             return self.simulator(parameters)
+        elif len(variables_i) == 1:
+            return self.simulator(parameters, variables_i)
         else:
             return self.simulator(parameters, *variables_i)
 
-    def implausibility(self, E, z_i, var_em, var_obs, var_method, var_model, var_inactive):
+    def implausibility(self, E, z_i, var_em, var_obs, var_method, var_model, var_inactive, transform=False):
 
-        """
+        '''
         Evaluates the implausibility measure given emulator output and observational
         data.
 
@@ -193,10 +191,19 @@ class HistoryMatch:
         var_inactive : float
             Additional variance of uncertainty given the exclusion of one or more parameters.
 
-        """
+        transform : bool
+            (For use if evaluating phase shifts using O. Thim's code)
+
+        '''
+        
+        # for use in phase shift code, must account for data being beteen -90 and 90 degrees
+        if transform == True:
+            if E - 3*np.sqrt((var_em + var_obs + var_method + var_model + var_inactive)) < -90:
+                I1 = np.sqrt( ( E + 180 - z_i )**2  /  (var_em + var_obs + var_method + var_model + var_inactive) )
+                I2 = np.sqrt( ( E - z_i )**2  /  (var_em + var_obs + var_method + var_model + var_inactive) )
+                return min(I1,I2)
         
 
-    
         return np.sqrt( ( E - z_i )**2  /  (var_em + var_obs + var_method + var_model + var_inactive) )
 
 
@@ -239,7 +246,6 @@ class HistoryMatch:
                             sample.hypercube_sample(self.ndim, nsamples, ntraining, nonimplausible_samples)
 
         elif self.shape == 'gaussian':
-            print('yes')
             if self.inactive == True and wave == self.inactive_wave:
                 self.ndim += self.ninactive
                 parameter_train, parameter_samples = \
@@ -272,10 +278,13 @@ class HistoryMatch:
 
         return parameter_train, parameter_samples
 
-    def run_wave(self, wave, observational_data, sigma_observational, sigma_model, sigma_method, wave_variables, nsamples, ntraining=None, emulate=False, Imax=2):
+
+    
+    def run_wave(self, wave, observational_data, sigma_observational, sigma_model, sigma_method, wave_variables,\
+                     nsamples, ntraining=None, emulate=False, Imax1=3, Imax2=None, Imax3=None, ndim=None):
 
 
-        """
+        '''
         Performs a single wave of history matching.
 
         Args
@@ -288,12 +297,15 @@ class HistoryMatch:
 
         Returns
         -------
-        self.nonimplausible_volume, nonimplausible_samples, I_samples, mu, sd, output_convergence
 
-        parameter_train : ndarray, shape (ntraining, ndim)
-            Input parameters used within the simulator.
+        nonimplausible_samples : ndarray, shape (N, ndim+1)
+            N Non-implausible samples remaining after wave. Last column are corresponding
+            implausibilities
 
-        """
+        '''
+
+        if ndim == None:
+            ndim = self.ndim
 
         # store results
         training_pts = []
@@ -301,12 +313,13 @@ class HistoryMatch:
         # generate samples over parameter space
         if wave == 1:
             # initialise training set and parameter space
-            parameter_train, parameter_samples = sample.hypercube_sample(self.ndim, nsamples, ntraining, parameter_bounds=self.parameter_bounds)
+            parameter_train, parameter_samples = sample.hypercube_sample(ndim, nsamples, ntraining, \
+                                                                            parameter_bounds=self.parameter_bounds)
         else:
             # access nonimplausible samples from previous wave
             nonimplausible_samples = self.results.get_nonimplausible(wave-1)
-            parameter_train, parameter_samples = self.generate_samples(nonimplausible_samples[:,:-1], nsamples, ntraining, wave)
-
+            parameter_train, parameter_samples = self.generate_samples(nonimplausible_samples[:,:-1], nsamples, \
+                                                                        ntraining, wave)
 
         training_pts.append(parameter_train)
         
@@ -315,10 +328,12 @@ class HistoryMatch:
         self.output_convergence = np.full(noutputs, False, dtype=bool)
         implausibilities_all = np.zeros((nsamples, noutputs))
 
+
         for output in tqdm(range(noutputs)):
 
             # evaluate simulator over training points
             Ztrain = self.simulate(parameter_train.T, variables_i=wave_variables[output])
+
 
             if emulate == False:
                 mu = self.simulate(parameter_samples.T, variables_i=wave_variables[output])
@@ -328,7 +343,8 @@ class HistoryMatch:
                     "Must specify number of training points if using emulator."
                 # train emulator
                 if self.emulator_choice == 'GP':
-                    GP = emulators.GaussianProcess(parameter_train, Ztrain, length_scale=10, signal_sd=100, bayes_linear = True, noise_sd = 1e-9)
+                    GP = emulators.GaussianProcess(parameter_train, Ztrain, length_scale=1, signal_sd=100, \
+                                                    bayes_linear = True, noise_sd = 1e-9)
                 elif self.emulator_choice == 'EC':
                     print('EC not yet developed')
                 # emulate outputs over sample space
@@ -346,56 +362,91 @@ class HistoryMatch:
             else:
                 sigma_inactive = 0
 
+            # if channel 3S1, need to transform outputs between -90 and 90 within implaus measure
+            if len(wave_variables[output]) == 5 and wave_variables[output][0] == 3:
+                transform = True
+            elif len(wave_variables[output]) == 5 and wave_variables[output][0] == 0:
+                transform = True
+            else:
+                transform = False
+
             # evaluate implausibility measure over parameter space
             for i in range(len(parameter_samples)):
                 implausibilities_all[i, output] = self.implausibility(mu[i], observational_data[output], sd[i]**2, sigma_observational[output]**2,\
-                                                                            sigma_method[output]**2, sigma_model[output]**2, sigma_inactive**2)
-
-            if output == 0:
-                GP = emulators.GaussianProcess(parameter_train, Ztrain, length_scale=10, signal_sd=100, bayes_linear = True, noise_sd = 1e-9)
-                if wave == 1:
-                    uniform_samples = np.zeros((100,4))
-                    for i in range(4):
-                        uniform_samples[:,i] = np.linspace(self.parameter_bounds[i,0], self.parameter_bounds[i,1], 100)
-                    uniform_mu, uniform_sd = GP.emulate(uniform_samples)
-                    emulator_mu = uniform_mu
-                    emulator_sd = uniform_sd
-                    parameter_train1 = parameter_train
-                elif wave == 2:
-                    bounds = utils.locate_boundaries(nonimplausible_samples[:,:-1], 4)
-                    uniform_samples = np.zeros((100,4))
-                    for i in range(4):
-                        uniform_samples[:,i] = np.linspace(self.parameter_bounds[i,0], self.parameter_bounds[i,1], 100)
-                    uniform_mu, uniform_sd = GP.emulate(uniform_samples)
-                    emulator_mu = uniform_mu
-                    emulator_sd = uniform_sd
-                    parameter_train1 = parameter_train
+                                                                            sigma_method[output]**2, sigma_model[output]**2, sigma_inactive**2, transform)
 
 
-        # get index of second highest maximum implaus for all outputs
-        max_implausibilities = implausibilities_all[range(len(parameter_samples)), implausibilities_all.argsort()[:,-Imax]]
+        # get 3 maximum implausibilities for each sample
+        I_M = implausibilities_all[range(len(parameter_samples)), implausibilities_all.argsort()[:,-1]]
+        I_M2 = implausibilities_all[range(len(parameter_samples)), implausibilities_all.argsort()[:,-2]]
+        I_M3 = implausibilities_all[range(len(parameter_samples)), implausibilities_all.argsort()[:,-3]]
+
+        # connect samples with their max implausibilities
+        concat_args = (parameter_samples, I_M.reshape(-1,1), I_M2.reshape(-1,1), I_M3.reshape(-1,1))
+        samples_I = np.concatenate(concat_args, axis=1)
+
         # discard samples with implausibility over threshold
-        samples_I = np.concatenate((parameter_samples, max_implausibilities.reshape(-1,1)), axis=1)
-        nonimplausible_samples = np.delete(samples_I, np.where(samples_I[:,-1] > 3), axis=0)
+        if Imax1 is not None:
+            nonimplausible_samples_temp = np.delete(samples_I, np.where(samples_I[:,-3] > Imax1), axis=0)
+            
+            if Imax2 is not None:
+                nonimplausible_samples_temp2 = np.delete(nonimplausible_samples_temp,\
+                                                         np.where(nonimplausible_samples_temp[:,-2] > Imax2), axis=0)
+                
+                if Imax3 is not None:
+                    nonimplausible_samples = np.delete(nonimplausible_samples_temp2, \
+                                                        np.where(nonimplausible_samples_temp2[:,-1] > Imax3), axis=0)
+                    
+                else:
+                    nonimplausible_samples = nonimplausible_samples_temp2
+        
+        elif Imax2 is not None:
+            nonimplausible_samples = np.delete(samples_I, np.where(samples_I[:,-2] > Imax2), axis=0)
 
+        # for testing, delete later ------
+        output_implaus = np.concatenate((implausibilities_all.argsort()[:,-1].reshape(-1,1), I_M.reshape(-1,1)), axis=1)
+        implausible_outputs = np.delete(output_implaus, np.where(output_implaus[:,-1] < 3), axis=0)
+        unique, counts = np.unique(implausible_outputs[:,0], return_counts=True)
+        #print(dict(zip(unique, counts)))
+        
         print('Number of Non-Implausible Samples: ' + str(nonimplausible_samples.shape[0]))
 
-        return nonimplausible_samples, samples_I, emulator_mu, emulator_sd, parameter_train1
+        return nonimplausible_samples, samples_I
 
 
 
     def run(self, nwaves, ntraining, nsamples, result_obj=None, emulate=False):
 
-        """
+        '''
         Performs multiple waves of history matching to find nonimplausible parameter space.
         Requires observational data to be initialised beforehand.
 
+        Args
+        ----
+
+        nwaves : int, optional
+            Number of history matching waves to complete. If None (default is None)
+            scheme will continue for 20 waves or until termination conditions are met,
+            whichever is sooner. Total number of waves may be less than nwaves if
+            termination conditions reached earlier.
+
+        ntraining : int
+            Number of samples to generate for use in emulator
+
+
+        nsamples : int
+            Total number of samples to evaulate over parameter space
+
+        emulate: bool
+            Evaluate emulator over samples rather than model
+
         Returns
         -------
+
         result: 'Result'
             Dictionary containing results of each wave
 
-        """
+        '''
 
         if self.obs_data is None:
             raise NotImplementedError("Observational data not initialised.")
@@ -408,17 +459,25 @@ class HistoryMatch:
             print('Running wave ' + str(wave))
 
             # select data for wave
-            observational_data = self.obs_data[wave-1]
-            sigma_observational = self.sigma_obs[wave-1]
-            sigma_model = self.sigma_model[wave-1]
-            sigma_method = self.sigma_method[wave-1]
-            wave_variables = self.variables[wave-1]
+            # ***** unfinished ****
+            if len(self.obs_data.shape) != 1:
+                observational_data = self.obs_data[wave-1]
+                sigma_observational = self.sigma_obs[wave-1]
+                sigma_model = self.sigma_model[wave-1]
+                sigma_method = self.sigma_method[wave-1]
+                wave_variables = self.variables[wave-1]
+            else:
+                observational_data = self.obs_data
+                sigma_observational = self.sigma_obs
+                sigma_model = self.sigma_model
+                sigma_method = self.sigma_method
+                wave_variables = self.variables
 
 
-            nonimplausible_samples, samples_I, emulator_mu, emulator_sd, parameter_train1 = \
+            nonimplausible_samples, samples_I = \
                             self.run_wave(wave, observational_data, sigma_observational,\
                                              sigma_model, sigma_method, wave_variables, nsamples, ntraining=ntraining, emulate=emulate)
-            self.store_result(Result, wave, (nonimplausible_samples, samples_I, emulator_mu, emulator_sd, parameter_train1))
+            self.store_result(Result, wave, (nonimplausible_samples, samples_I))
             
             # check for empty non-implausible volume
             if nonimplausible_samples.shape[0] == 0:
@@ -434,6 +493,7 @@ class HistoryMatch:
         return self.results
 
     def store_result(self, result_obj, wave, wave_results):
+
         
         # check for duplicate and overwrite
         if wave in result_obj.results_dict['wave']:
@@ -449,10 +509,6 @@ class HistoryMatch:
             result_obj.results_dict['nonimplausible'].append(wave_results[0])
             result_obj.results_dict['samples_I'].append(wave_results[1])
 
-        result_obj.results_dict['emulator_mu'].append(wave_results[2])
-        result_obj.results_dict['emulator_sd'].append(wave_results[3])
-        result_obj.results_dict['parameter_train1'].append(wave_results[4])
-
         result_obj.save_to_file()
         # store for access in later waves
         self.results = result_obj
@@ -461,7 +517,7 @@ class HistoryMatch:
 
 class Simulator(HistoryMatch): 
 
-    """
+    '''
     Simulator that generates outputs given an input of parameter values.
     Must be defined before running the history match.
 
@@ -478,7 +534,7 @@ class Simulator(HistoryMatch):
     output: ndarray, shape (N,)
         Array of the single simulator output given for each set of inputs.
 
-    """
+    '''
 
 
     def __init__(self, hm_instance):

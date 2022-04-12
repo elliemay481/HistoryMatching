@@ -38,7 +38,8 @@ def LHsampling(ndim, Nsamples, limits):
     samples = lhs(ndim, samples=Nsamples, criterion='center')
     # adjust sample points for parameter ranges
     if ndim == 1:
-        samples = samples*(limits[1]-limits[0]) + limits[0]
+        
+        samples = samples*(limits[0][1]-limits[0][0]) + limits[0][0]
     else:
         for i in range(ndim):
             samples[:,i] = samples[:,i]*(limits[i,1]-limits[i,0]) + limits[i,0]
@@ -51,6 +52,8 @@ def LHsampling(ndim, Nsamples, limits):
 def hypercube_sample(ndim, Nsamples, Ntraining, nonimplausible_samples=None, inactive=False, parameter_bounds=None):
 
     '''
+    Generate well-spaced samples distributed within a hyperrectangle.
+
     Args
     ---
 
@@ -157,7 +160,6 @@ def gaussian_sample(ndim, Nsamples, Ntraining, nonimplausible_samples, inactive=
     # Compute the Cholesky decomposition
     L = np.linalg.cholesky(K)
 
-
     # Compute multivariate gaussian distributed samples
     input_train = mean.reshape(ndim, 1) + np.dot(L, uniform_train[:,:ndim].reshape(ndim, Ntraining))
     parameter_samples = mean.reshape(ndim, 1) + np.dot(L, uniform_samples[:,:ndim].reshape(ndim, Nsamples))
@@ -177,7 +179,7 @@ def gaussian_sample(ndim, Nsamples, Ntraining, nonimplausible_samples, inactive=
 def uniform_ellipsoid_sample(ndim, Nsamples, Ntraining, nonimplausible_samples, inactive=False, parameter_bounds=None):
 
     '''
-    Generate well-spaced samples distributed according to a multivariate normal distribution.
+    Generate well-spaced samples distributed uniformly in an ellipsoid.
 
     Args
     ---
@@ -238,9 +240,6 @@ def uniform_ellipsoid_sample(ndim, Nsamples, Ntraining, nonimplausible_samples, 
         uniform_ell_samples[:,i] = normal_samples[:,i]/sample_norm
 
     # radially distribute samples
-    #r_train = lhs(ndim, samples=Ntraining, criterion='center')
-    #r_samp = lhs(ndim, samples=Nsamples, criterion='center')
-
     r_samp = np.zeros((Nsamples,ndim))
     r_train = np.zeros((Ntraining,ndim))
     for i in range(ndim):
@@ -250,7 +249,7 @@ def uniform_ellipsoid_sample(ndim, Nsamples, Ntraining, nonimplausible_samples, 
     uniform_ell_train *= r_train**(1.0/ndim)
     uniform_ell_samples *= r_samp**(1.0/ndim)
 
-    # Add pertubation to covariance
+    # Add pertubation to covariance (for numerical stability)
     epsilon = 1e-9
     K = covariance + epsilon*np.identity(ndim)
 
@@ -342,8 +341,6 @@ def rotated_hypercube_sample(ndim, Nsamples, Ntraining, nonimplausible_samples, 
 
     # if inactive parameter introduced, append well spaced samples
     if inactive == True:
-        #print(parameter_train.T.shape)
-        #print(uniform_train[:,-1].reshape(-1,1).shape)
         uniform_train[:,-1] = 0.5*(uniform_train[:,-1]+1)*(parameter_bounds[-1,1]-parameter_bounds[-1,0]) + parameter_bounds[-1,0]
         uniform_samples[:,-1] = 0.5*(uniform_samples[:,-1]+1)*(parameter_bounds[-1,1]-parameter_bounds[-1,0]) + parameter_bounds[-1,0]
         parameter_train_inac = np.concatenate((parameter_train, uniform_train[:,-1].reshape(-1,1)),axis=1)

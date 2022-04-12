@@ -70,31 +70,28 @@ class GaussianProcess(Emulator):
     def emulate(self, param_samples):
 
         
+
+        
         self.input_test = param_samples
 
-        #K_XX = self.kernel(self.input_train, self.input_train, self.sigma_f, self.l) + (self.sigma_noise**2)*np.eye(len(self.input_train))
-        #K_XX_inv = np.linalg.inv(K_XX)
+        K_XX = self.kernel(self.input_train, self.input_train, self.sigma_f, self.l) + (self.sigma_noise**2)*np.eye(len(self.input_train))
+        K_XX_inv = np.linalg.inv(K_XX)
 
-        #self.K_XX = K_XX
-        #self.K_XX_inv = K_XX_inv
+        self.K_XX = K_XX
+        self.K_XX_inv = K_XX_inv
         
         K_XsX = self.kernel(self.input_test, self.input_train, self.sigma_f, self.l)
         K_XXs = self.kernel(self.input_train, self.input_test, self.sigma_f, self.l)
-        #K_XsXs = self.kernel(self.input_test, self.input_test, self.sigma_f, self.l)
 
         self.K_XsX = K_XsX
         self.K_XXs = K_XXs
-        #self.K_XsXs = K_XsXs
 
-        
 
         if self.bayes_linear == True:
             Xd = self.design_matrix(self.input_test)
             mu_ols = np.dot(Xd, self.coeff_ols)
 
-            #mu = self.K_XsX.dot(self.K_XX_inv).dot(self.output_train)
             mu = mu_ols + self.K_XsX.dot(self.K_XX_inv).dot(self.output_train - np.mean(self.output_train))
-            #cov = self.sigma_f**2 - self.K_XsX.dot(self.K_XX_inv).dot(self.K_XXs)
             cov_diag = self.sigma_f**2 - np.einsum('ij,ji->i', np.dot(self.K_XsX, self.K_XX_inv), self.K_XXs)
 
             sd = np.sqrt(np.abs(cov_diag))
@@ -188,6 +185,9 @@ class GaussianProcess(Emulator):
 
     
     def design_matrix(self, x):
+
+        """Constructs design matrix for use in linear regression
+        """
             
             N = self.ndim*(self.order) + 1
             if self.order > 1:

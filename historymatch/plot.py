@@ -82,7 +82,7 @@ def plot_implausibility2D(samples, parameter_bounds, parameters, bins=20, Fig=No
             else:
                 implausibilities[i,j] = np.NaN
     
-    clevels=[0,0.5,1,1.5,2,2.5,3,3.5]
+    clevels=[1.6,1.8,2.0,2.2,2.4,2.6,2.8,3,3.2]
 
     if plot_kwargs is None:
         plot_kwargs = dict()
@@ -92,7 +92,8 @@ def plot_implausibility2D(samples, parameter_bounds, parameters, bins=20, Fig=No
     if plot_kwargs.get('cmap') is None:
         colormap = 'viridis_r'
         cmap = cm.get_cmap(colormap, len(clevels))
-        colorlist = [cmap(0), cmap(0.1), cmap(0.15), cmap(0.3), cmap(0.45), cmap(0.6), cmap(0.85), cmap(1)]
+        print(cmap(0.13))
+        colorlist = [cmap(0), cmap(0.15), cmap(0.25), cmap(0.35), cmap(0.45), cmap(0.6), cmap(0.75), cmap(0.85), cmap(1), cmap(1)]
         plot_kwargs['colors'] = plot_kwargs.get('colors', colorlist)
     else:
         cmap = cm.get_cmap(plot_kwargs.get('cmap'))
@@ -100,25 +101,26 @@ def plot_implausibility2D(samples, parameter_bounds, parameters, bins=20, Fig=No
     ax.set_facecolor(cmap(0.9999))
 
 
-    im = ax.contourf(xvals, yvals, implausibilities, **plot_kwargs)
+    im = ax.contourf(xvals, yvals, implausibilities, extend="max", **plot_kwargs)
 
-    
     ax.set_xlim([parameter_bounds[0,0], parameter_bounds[0,1]])
     ax.set_ylim([parameter_bounds[1,0], parameter_bounds[1,1]])
     
     if labels:
         ax.set_xlabel(labels[parameters[0]])
         ax.set_ylabel(labels[parameters[1]])
-    cbar = fig.colorbar(im, ax=ax)
-    cbar.set_label('Implausibility')
-    if colorbar == False:
-        cbar.remove()
+    #cbar = fig.colorbar(im, ax=ax)
+    #cbar.set_label('Implausibility')
+    #if colorbar == False:
+        #cbar.remove()
     #ax.set_title('Wave ' + str(wave+1) + ' Implausibility')
+    if colorbar ==  True:
+        return im
 
     
 
 
-def opticaldepth_2D(samples, parameter_bounds, parameters, bins=20, Fig=None, colorbar=False, labels=None, plot_kwargs=None):
+def opticaldepth_2D(samples, nonimplausible_samples, parameter_bounds, parameters, bins=20, Fig=None, colorbar=False, labels=None, plot_kwargs=None):
     
     """
     Plots an optical depth plot for two parameters.
@@ -189,31 +191,41 @@ def opticaldepth_2D(samples, parameter_bounds, parameters, bins=20, Fig=None, co
             bin_indices = np.intersect1d(x_indices, y_indices)
             # count nonimplausible points over remaining dimensions
             n_pts = np.count_nonzero(samples[bin_indices][:,-1] < 3)
+
+            # find points within bin
+            y_indices = np.where(np.logical_and(nonimplausible_samples[:,parameters[1]]>=ybin0, nonimplausible_samples[:,parameters[1]]<ybin1))[0]
+            x_indices = np.where(np.logical_and(nonimplausible_samples[:,parameters[0]]>=xbin0, nonimplausible_samples[:,parameters[0]]<xbin1))[0]
+            bin_indices = np.intersect1d(x_indices, y_indices)
+            # count nonimplausible points over remaining dimensions
+            n_pts = len(bin_indices)
+
             # find initial number of points 
             y_indices_0 = np.where(np.logical_and(samples[:,parameters[1]]>=ybin0, samples[:,parameters[1]]<ybin1))
             x_indices_0 = np.where(np.logical_and(samples[:,parameters[0]]>=xbin0, samples[:,parameters[0]]<xbin1))
             bin_indices_0 = np.intersect1d(x_indices_0, y_indices_0)
 
+            #nonimplausible_samples
+
             if len(bin_indices_0) != 0:
                 densities[i,j] = n_pts/len(bin_indices_0)
             else:
                 densities[i,j] = 0
-            
 
-    
     #bounds=np.linspace(np.amin(densities), np.amax(densities), 8)
-    clevels = [0,0.01,0.1,0.2,0.3,0.4,0.5,0.6]
+    clevels = [0,0.05,0.1,0.2,0.4,0.6]
 
     if plot_kwargs is None:
         plot_kwargs = dict()
     
-    plot_kwargs['cmap'] = plot_kwargs.get('cmap', 'afmhot_r')
+    plot_kwargs['cmap'] = plot_kwargs.get('cmap', 'gist_heat_r')
 
-    cmap = cm.get_cmap(plot_kwargs.get('cmap'))
+    levels = plot_kwargs.get('levels')
+    cmap = cm.get_cmap(plot_kwargs.get('cmap'), len(clevels))
 
-    im = ax.contourf(xvals, yvals, densities, **plot_kwargs)
+    im = ax.contourf(xvals, yvals, densities, extend="max", **plot_kwargs)
 
-    ax.set_facecolor(cmap(0))
+    #ax.set_facecolor(cmap(0))
+    #cbar = fig.colorbar(im)
 
 
     ax.set_xlim([parameter_bounds[0,0], parameter_bounds[0,1]])
@@ -221,6 +233,9 @@ def opticaldepth_2D(samples, parameter_bounds, parameters, bins=20, Fig=None, co
     if labels:
         ax.set_xlabel(labels[parameters[0]])
         ax.set_ylabel(labels[parameters[1]])
+
+    if colorbar ==  True:
+        return im
 
 
 
@@ -384,10 +399,35 @@ def opticaldepth_1D(samples, parameter_bounds, parameter, bins=20, normalize=Fal
         ax.legend(loc='upper right')
 
 
-def get_cov_ellipse(cov, centre, nstd, chi, ax, color, linestyle, lw=3):
+def get_cov_ellipse(cov, centre, chisq, ax, color, linestyle, lw=3):
     """
     Plot an isoprobaility-contour ellipse given a mean (centre) and
     2D covariance matrix.
+
+    Args
+    ---
+
+    cov : ndarray
+        Covariance matrix
+
+    centre : ndarray
+        Centre, or mean, of ellipse
+
+    chisq : float
+        Critical chisq value (determines probability mass within ellipse)
+
+    ax : obj
+        Axis of figure to plot in
+
+    color : str
+        Color of ellipse boundary
+
+    linestyle : str
+        Linestyle of ellipse boundary (see Matplotlib)
+
+    lw : int
+        Linewidth of ellipse boundary (see Matplotlib)
+
 
     """
 
@@ -400,7 +440,7 @@ def get_cov_ellipse(cov, centre, nstd, chi, ax, color, linestyle, lw=3):
     theta = np.arctan2(eigvecs[:,0][1], eigvecs[:,0][0])
 
     # Width and height of ellipse
-    width, height = 2 * np.sqrt(chi*np.abs(eigvals))
+    width, height = 2 * np.sqrt(chisq*np.abs(eigvals))
     
     t = np.linspace(0, 2*np.pi, 100)
     ellipse = np.array([0.5*width*np.cos(t) , 0.5*height*np.sin(t)]) 
