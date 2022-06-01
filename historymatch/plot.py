@@ -222,7 +222,7 @@ def opticaldepth_2D(samples, nonimplausible_samples, parameter_bounds, parameter
     levels = plot_kwargs.get('levels')
     cmap = cm.get_cmap(plot_kwargs.get('cmap'), len(clevels))
 
-    im = ax.contourf(xvals, yvals, densities, extend="max", **plot_kwargs)
+    im = ax.contourf(xvals, yvals, densities, extend="max", alpha=1, **plot_kwargs)
 
     #ax.set_facecolor(cmap(0))
     #cbar = fig.colorbar(im)
@@ -236,6 +236,10 @@ def opticaldepth_2D(samples, nonimplausible_samples, parameter_bounds, parameter
 
     if colorbar ==  True:
         return im
+
+
+
+
 
 
 

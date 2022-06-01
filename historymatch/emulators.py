@@ -111,17 +111,18 @@ class GaussianProcess(Emulator):
 
 
     def SE(self):
-        """Create a squared exponential kernel
+        '''
+        Create a squared exponential kernel
 
         Returns
         -------
         squared_exponential: function
             A function of two numpy.ndarrays of floats that computes the squared exponential
             kernel with given standard deviation and length scale.
-        """
+        '''
 
         def squared_exponential(x1,x2,sigma_f,l):
-            """
+            '''
 
             Emulates the model output given a set of input parameters.
 
@@ -142,7 +143,7 @@ class GaussianProcess(Emulator):
             -------
             K : ndarray, shape (n, m)
                 Covariance matrix
-            """
+            '''
 
             if x1.ndim == 1:
                 x1 = x1.reshape(-1, 1)
@@ -158,7 +159,8 @@ class GaussianProcess(Emulator):
 
     def linear_regression(self):
 
-        """Performs linear regression
+        '''
+        Performs linear regression
 
         Returns:
             coeff : ndarray, shape (order,)
@@ -167,7 +169,7 @@ class GaussianProcess(Emulator):
                 The regression fit to the training samples.
             var_ols : ndarray, shape (ntraining,)
                 The variance of the fit.
-        """
+        '''
 
         X = self.design_matrix(self.input_train)
 
@@ -186,27 +188,28 @@ class GaussianProcess(Emulator):
     
     def design_matrix(self, x):
 
-        """Constructs design matrix for use in linear regression
-        """
+        '''
+        Constructs design matrix for use in linear regression
+        '''
             
-            N = self.ndim*(self.order) + 1
-            if self.order > 1:
-                ncombinations = int(factorial(self.ndim) / (2*factorial(self.ndim-2)))
-                X_d = np.zeros((len(x),N+ncombinations))
-            else:
-                X_d = np.zeros((len(x),N))
-            X_d[:,0] = 1
-            for i in range(self.order):
+        N = self.ndim*(self.order) + 1
+        if self.order > 1:
+            ncombinations = int(factorial(self.ndim) / (2*factorial(self.ndim-2)))
+            X_d = np.zeros((len(x),N+ncombinations))
+        else:
+            X_d = np.zeros((len(x),N))
+        X_d[:,0] = 1
+        for i in range(self.order):
+            for j in range(self.ndim):
+                X_d[:,1 + (i*self.ndim + j)] = x[:,j]**(i+1)
+        prod = 0
+        if self.order > 1:
+            for i in range(self.ndim):
                 for j in range(self.ndim):
-                    X_d[:,1 + (i*self.ndim + j)] = x[:,j]**(i+1)
-            prod = 0
-            if self.order > 1:
-                for i in range(self.ndim):
-                    for j in range(self.ndim):
-                        if i < j:
-                            X_d[:,N + prod] = x[:,i]*x[:,j]
-                            prod += 1
-            return X_d
+                    if i < j:
+                        X_d[:,N + prod] = x[:,i]*x[:,j]
+                        prod += 1
+        return X_d
 
 class EigenvectorContinuation(Emulator):
 

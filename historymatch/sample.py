@@ -49,7 +49,7 @@ def LHsampling(ndim, Nsamples, limits):
 
 
 
-def hypercube_sample(ndim, Nsamples, Ntraining, nonimplausible_samples=None, inactive=False, parameter_bounds=None):
+def hypercube_sample(ndim, Nsamples, Ntraining, nonimplausible_samples=None, inactive=False, ninactive=None, parameter_bounds=None):
 
     '''
     Generate well-spaced samples distributed within a hyperrectangle.
@@ -66,8 +66,19 @@ def hypercube_sample(ndim, Nsamples, Ntraining, nonimplausible_samples=None, ina
     Nsamples : int
         Total number of samples to generate.
 
-    bounds : ndarray, shape (2, ndim)
+    nonimplausible_samples : ndarray, shape (N, ndim)
+        Array of N (non-implausible) samples.
+
+    inactive: bool, optional
+        Introduce one or more inactive parameters after generating samples. Will correspond to the
+        last rows of parameter_bounds.
+
+    ninactive: int, optional
+        Number of inactive parameters introduced.
+
+    parameter_bounds : ndarray, shape (2, ndim), optional
         Array of upper and lower boundaries of each input parameter.
+
 
     Returns
     -------
@@ -80,17 +91,22 @@ def hypercube_sample(ndim, Nsamples, Ntraining, nonimplausible_samples=None, ina
     
     '''
 
-    # wave 1
-    if type(nonimplausible_samples) is not np.ndarray:
+    if nonimplausible_samples is None and parameter_bounds is None:
+        print('ERROR: Must specify either parameter boundaries or a set of nonimplausible samples to constrain \
+                samples within a hypercube.')
+        return 0
+
+    
+    if type(nonimplausible_samples) is not np.ndarray: # wave 1 (no nonimplausible samples available)
         bounds = parameter_bounds
-    else:
+    else:   # nonimplausible samples available - locate their boundaries
         if inactive == True:
-            bounds = utils.locate_boundaries(nonimplausible_samples, ndim-1)
+            bounds = utils.locate_boundaries(nonimplausible_samples, ndim-ninactive)
         else:
             bounds = utils.locate_boundaries(nonimplausible_samples, ndim)
 
     if inactive == True:
-        extended_bounds = np.concatenate((bounds, parameter_bounds[-1].reshape(1,-1)),axis=0)
+        extended_bounds = np.concatenate((bounds, parameter_bounds[-ninactive:]),axis=0)
         bounds = extended_bounds
 
 
@@ -103,7 +119,7 @@ def hypercube_sample(ndim, Nsamples, Ntraining, nonimplausible_samples=None, ina
 
 
 
-def gaussian_sample(ndim, Nsamples, Ntraining, nonimplausible_samples, inactive=False, parameter_bounds=None):
+def gaussian_sample(ndim, Nsamples, Ntraining, nonimplausible_samples, inactive=False, ninactive=None, parameter_bounds=None):
 
     '''
     Generate well-spaced samples distributed according to a multivariate normal distribution.
@@ -120,11 +136,18 @@ def gaussian_sample(ndim, Nsamples, Ntraining, nonimplausible_samples, inactive=
     Nsamples : int
         Total number of samples to generate.
 
-    mean : ndarray, shape (ndim,)
-        Mean of normal distribution.
+    nonimplausible_samples : ndarray, shape (N, ndim)
+        Array of N (non-implausible) samples.
 
-    covariance : ndarray, shape (ndim, ndim)
-        Covariance matrix of distribution.
+    inactive: bool, optional
+        Introduce one or more inactive parameters after generating samples. Will correspond to the
+        last rows of parameter_bounds.
+
+    ninactive: int, optional
+        Number of inactive parameters introduced.
+
+    parameter_bounds : ndarray, shape (2, ndim), optional
+        Array of upper and lower boundaries of each input parameter.
 
     Returns
     -------
@@ -165,10 +188,13 @@ def gaussian_sample(ndim, Nsamples, Ntraining, nonimplausible_samples, inactive=
     parameter_samples = mean.reshape(ndim, 1) + np.dot(L, uniform_samples[:,:ndim].reshape(ndim, Nsamples))
 
     if inactive == True:
-        uniform_train[:,-1] = uniform_train[:,-1]*(parameter_bounds[-1,1]-parameter_bounds[-1,0]) + parameter_bounds[-1,0]
-        uniform_samples[:,-1] = uniform_samples[:,-1]*(parameter_bounds[-1,1]-parameter_bounds[-1,0]) + parameter_bounds[-1,0]
-        input_train_inac = np.concatenate((input_train.T, uniform_train[:,-1].reshape(-1,1)),axis=1)
-        parameter_samples_inac = np.concatenate((parameter_samples.T, uniform_samples[:,-1].reshape(-1,1)),axis=1)
+        input_train_inac = np.copy(input_train.T)
+        parameter_samples_inac = np.copy(parameter_samples.T)
+        for i in range(1,ninactive+1):
+            uniform_train[:,-i] = uniform_train[:,-i]*(parameter_bounds[-i,1]-parameter_bounds[-i,0]) + parameter_bounds[-i,0]
+            uniform_samples[:,-i] = uniform_samples[:,-i]*(parameter_bounds[-i,1]-parameter_bounds[-i,0]) + parameter_bounds[-i,0]
+            input_train_inac = np.concatenate((input_train_inac, uniform_train[:,-i].reshape(-1,1)),axis=1)
+            parameter_samples_inac = np.concatenate((parameter_samples_inac, uniform_samples[:,-i].reshape(-1,1)),axis=1)
         return input_train_inac, parameter_samples_inac
 
     return input_train.T, parameter_samples.T
@@ -176,7 +202,7 @@ def gaussian_sample(ndim, Nsamples, Ntraining, nonimplausible_samples, inactive=
 
 
 
-def uniform_ellipsoid_sample(ndim, Nsamples, Ntraining, nonimplausible_samples, inactive=False, parameter_bounds=None):
+def uniform_ellipsoid_sample(ndim, Nsamples, Ntraining, nonimplausible_samples, inactive=False, ninactive=None, parameter_bounds=None):
 
     '''
     Generate well-spaced samples distributed uniformly in an ellipsoid.
@@ -193,11 +219,18 @@ def uniform_ellipsoid_sample(ndim, Nsamples, Ntraining, nonimplausible_samples, 
     Nsamples : int
         Total number of samples to generate.
 
-    mean : ndarray, shape (ndim,)
-        Mean of normal distribution.
+    nonimplausible_samples : ndarray, shape (N, ndim)
+        Array of N (non-implausible) samples.
 
-    covariance : ndarray, shape (ndim, ndim)
-        Covariance matrix of distribution.
+    inactive: bool, optional
+        Introduce one or more inactive parameters after generating samples. Will correspond to the
+        last rows of parameter_bounds.
+
+    ninactive: int, optional
+        Number of inactive parameters introduced.
+
+    parameter_bounds : ndarray, shape (2, ndim), optional
+        Array of upper and lower boundaries of each input parameter.
 
     Returns
     -------
@@ -266,10 +299,13 @@ def uniform_ellipsoid_sample(ndim, Nsamples, Ntraining, nonimplausible_samples, 
     parameter_samples = mean.reshape(ndim, 1) + np.sqrt(chisq)*ell_samples
     
     if inactive == True:
-        uniform_train[:,-1] = uniform_train[:,-1]*(parameter_bounds[-1,1]-parameter_bounds[-1,0]) + parameter_bounds[-1,0]
-        uniform_samples[:,-1] = uniform_samples[:,-1]*(parameter_bounds[-1,1]-parameter_bounds[-1,0]) + parameter_bounds[-1,0]
-        input_train_inac = np.concatenate((input_train.T, uniform_train[:,-1].reshape(-1,1)),axis=1)
-        parameter_samples_inac = np.concatenate((parameter_samples.T, uniform_samples[:,-1].reshape(-1,1)),axis=1)
+        input_train_inac = np.copy(input_train.T)
+        parameter_samples_inac = np.copy(parameter_samples.T)
+        for i in range(1,ninactive+1):
+            uniform_train[:,-i] = uniform_train[:,-i]*(parameter_bounds[-i,1]-parameter_bounds[-i,0]) + parameter_bounds[-i,0]
+            uniform_samples[:,-i] = uniform_samples[:,-i]*(parameter_bounds[-i,1]-parameter_bounds[-i,0]) + parameter_bounds[-i,0]
+            input_train_inac = np.concatenate((input_train_inac, uniform_train[:,-i].reshape(-1,1)),axis=1)
+            parameter_samples_inac = np.concatenate((parameter_samples_inac, uniform_samples[:,-i].reshape(-1,1)),axis=1)
         return input_train_inac, parameter_samples_inac
 
     return input_train.T, parameter_samples.T
@@ -277,7 +313,7 @@ def uniform_ellipsoid_sample(ndim, Nsamples, Ntraining, nonimplausible_samples, 
 
 
 
-def rotated_hypercube_sample(ndim, Nsamples, Ntraining, nonimplausible_samples, parameter_bounds=None, inactive=False):
+def rotated_hypercube_sample(ndim, Nsamples, Ntraining, nonimplausible_samples, inactive=False, ninactive=None, parameter_bounds=None):
     '''
     Generate well-spaced samples using Latin Hypercube sampling and rotate to correspond to non-implausible volume.
 
@@ -295,6 +331,16 @@ def rotated_hypercube_sample(ndim, Nsamples, Ntraining, nonimplausible_samples, 
 
     nonimplausible_samples : ndarray, shape (N, ndim)
         Array of N (non-implausible) samples.
+
+    inactive: bool, optional
+        Introduce one or more inactive parameters after generating samples. Will correspond to the
+        last rows of parameter_bounds.
+
+    ninactive: int, optional
+        Number of inactive parameters introduced.
+
+    parameter_bounds : ndarray, shape (2, ndim), optional
+        Array of upper and lower boundaries of each input parameter.
 
     Returns
     -------
@@ -340,11 +386,25 @@ def rotated_hypercube_sample(ndim, Nsamples, Ntraining, nonimplausible_samples, 
         parameter_samples[:,dim] += mean[dim]
 
     # if inactive parameter introduced, append well spaced samples
+
     if inactive == True:
-        uniform_train[:,-1] = 0.5*(uniform_train[:,-1]+1)*(parameter_bounds[-1,1]-parameter_bounds[-1,0]) + parameter_bounds[-1,0]
-        uniform_samples[:,-1] = 0.5*(uniform_samples[:,-1]+1)*(parameter_bounds[-1,1]-parameter_bounds[-1,0]) + parameter_bounds[-1,0]
-        parameter_train_inac = np.concatenate((parameter_train, uniform_train[:,-1].reshape(-1,1)),axis=1)
-        parameter_samples_inac = np.concatenate((parameter_samples, uniform_samples[:,-1].reshape(-1,1)),axis=1)
+        input_train_inac = np.copy(input_train.T)
+        parameter_samples_inac = np.copy(parameter_samples.T)
+        for i in range(1,ninactive+1):
+            uniform_train[:,-i] = uniform_train[:,-i]*(parameter_bounds[-i,1]-parameter_bounds[-i,0]) + parameter_bounds[-i,0]
+            uniform_samples[:,-i] = uniform_samples[:,-i]*(parameter_bounds[-i,1]-parameter_bounds[-i,0]) + parameter_bounds[-i,0]
+            input_train_inac = np.concatenate((input_train_inac, uniform_train[:,-i].reshape(-1,1)),axis=1)
+            parameter_samples_inac = np.concatenate((parameter_samples_inac, uniform_samples[:,-i].reshape(-1,1)),axis=1)
+        return input_train_inac, parameter_samples_inac
+
+    if inactive == True:
+        input_train_inac = np.copy(input_train.T)
+        parameter_samples_inac = np.copy(parameter_samples.T)
+        for i in range(1,ninactive+1):
+            uniform_train[:,-i] = 0.5*(uniform_train[:,-i]+1)*(parameter_bounds[-i,1]-parameter_bounds[-i,0]) + parameter_bounds[-i,0]
+            uniform_samples[:,-i] = 0.5*(uniform_samples[:,-i]+1)*(parameter_bounds[-i,1]-parameter_bounds[-i,0]) + parameter_bounds[-i,0]
+            input_train_inac = np.concatenate((input_train_inac, uniform_train[:,-i].reshape(-1,1)),axis=1)
+            parameter_samples_inac = np.concatenate((parameter_samples_inac, uniform_samples[:,-i].reshape(-1,1)),axis=1)
         return parameter_train_inac, parameter_samples_inac
 
     return parameter_train, parameter_samples
